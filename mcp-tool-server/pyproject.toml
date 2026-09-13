@@ -1,0 +1,24 @@
+[project]
+name = "fde-mcp-server"
+version = "0.1.0"
+description = "MCP server exposing get_customer_record and trigger_refund with strict validation over stdio."
+requires-python = ">=3.10"
+dependencies = [
+    "mcp[cli]<2",
+    "pydantic>=2.13.5",
+]
+
+[project.scripts]
+fde-mcp-server = "fde_mcp_server.main:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/fde_mcp_server"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+]
