@@ -1,0 +1,30 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  # Two intentionally low-cardinality labels: which service, which file.
+  # request_id is NOT a label -- Loki indexes labels, and a new label
+  # value per request would blow up that index. request_id stays inside
+  # the log line's JSON, extracted at query time with `| json` instead.
+  - job_name: gateway
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: gateway
+          service: llm-redaction-gateway
+          __path__: /var/log/gateway/gateway.log
+
+  - job_name: mock
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: mock
+          service: llm-redaction-gateway
+          __path__: /var/log/gateway/mock.log

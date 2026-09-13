@@ -1,0 +1,42 @@
+services:
+  loki:
+    image: grafana/loki:3.0.0
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - loki-data:/loki
+
+  promtail:
+    image: grafana/promtail:3.0.0
+    ports:
+      - "9080:9080"
+    volumes:
+      - ./promtail-config.yml:/etc/promtail/config.yml:ro
+      # Mount the whole directory, not individual files -- `rm -f gateway.log`
+      # (which you do often, between test runs) deletes and recreates the
+      # file at the same path. A single-file bind mount would keep pointing
+      # at the deleted file's old inode; a directory mount picks the new
+      # file up correctly because it reflects the directory's real contents.
+      - ..:/var/log/gateway:ro
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
+
+  grafana:
+    image: grafana/grafana:11.0.0
+    ports:
+      - "3000:3000"
+    environment:
+      # Local-only convenience -- skips the login screen entirely. Never
+      # do this for anything reachable beyond localhost.
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_AUTH_DISABLE_LOGIN_FORM=true
+    volumes:
+      - ./grafana-datasource.yml:/etc/grafana/provisioning/datasources/datasource.yml:ro
+    depends_on:
+      - loki
+
+volumes:
+  loki-data:
