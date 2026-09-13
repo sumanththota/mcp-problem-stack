@@ -10,6 +10,9 @@ flush completes.
 from __future__ import annotations
 
 import json
+import logging
+import time
+import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -18,9 +21,21 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from .buffer import HoldbackBuffer
-from .config import MissingConfigError, api_key, model
+from .config import MissingConfigError, api_key, log_level, model
 from .models import ChatCompletionRequest
 from .upstream import stream_chat_completion
+
+# One JSON object per line, nothing else -- so a log line is directly
+# `jq`-able instead of needing to be stripped of a "name: " prefix first.
+# Configured here (not just in main.py) so it also applies when uvicorn
+# imports this module directly, as the test suite does.
+#
+# Root stays at INFO regardless of LOG_LEVEL -- only this gateway's own
+# logger is raised to DEBUG, so turning on chunk-level tracing doesn't
+# also drag in httpx/httpcore/uvicorn's own internal debug noise.
+logging.basicConfig(level=logging.INFO, format="%(message)s")
+logger = logging.getLogger("llm_gateway")
+logger.setLevel(getattr(logging, log_level(), logging.INFO))
 
 
 def _chunk(envelope: dict, content: str = "", finish_reason: str | None = None) -> bytes:
@@ -67,12 +82,17 @@ async def chat_completions(
     client: httpx.AsyncClient = request.app.state.http_client
     messages = [message.model_dump() for message in payload.messages]
 
+    request_id = uuid.uuid4().hex[:12]
+    started = time.monotonic()
+    logger.info(json.dumps({"event": "request_start", "request_id": request_id}))
+
     async def event_stream() -> AsyncIterator[bytes]:
         buffer = HoldbackBuffer()  # fresh per request -- never shared, unlike client
         envelope: dict | None = None
         pending_finish_reason: str | None = None
+        redaction_counts: dict[str, int] = {}
 
-        async for line in stream_chat_completion(client, messages):
+        async for line in stream_chat_completion(client, messages, request_id):
             if not line.startswith("data: ") or line == "data: [DONE]":
                 continue
             parsed = json.loads(line.removeprefix("data: "))
@@ -86,14 +106,30 @@ async def chat_completions(
             if finish_reason is not None:
                 pending_finish_reason = finish_reason  # ADR-0004: hold, don't relay yet
             if content:
-                safe = buffer.append(content)
+                safe = buffer.append(content, redaction_counts)
+                if logger.isEnabledFor(logging.DEBUG):
+                    # Lengths only -- never the delta or buffer text itself.
+                    logger.debug(json.dumps({
+                        "event": "delta",
+                        "request_id": request_id,
+                        "chars_in": len(content),
+                        "chars_flushed": len(safe),
+                        "chars_held": buffer.held_length,
+                    }))
                 if safe:
                     yield _chunk(envelope, content=safe)
 
-        remaining = buffer.flush()
+        remaining = buffer.flush(redaction_counts)
         if remaining:
             yield _chunk(envelope, content=remaining)
         yield _chunk(envelope, finish_reason=pending_finish_reason or "stop")
         yield b"data: [DONE]\n\n"
+
+        logger.info(json.dumps({
+            "event": "request_end",
+            "request_id": request_id,
+            "duration_ms": round((time.monotonic() - started) * 1000, 1),
+            "redactions": redaction_counts,
+        }))
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")

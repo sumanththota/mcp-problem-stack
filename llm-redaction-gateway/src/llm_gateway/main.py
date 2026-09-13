@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from pathlib import Path
 
 import uvicorn
@@ -14,8 +13,10 @@ _ENV_FILE = Path(__file__).resolve().parent.parent.parent / ".env"
 
 
 def main() -> None:
+    # Loaded before `app` is imported (uvicorn imports it lazily from the
+    # string below), so LOG_LEVEL from .env reaches app.py's own logging
+    # setup -- app.py is the sole place that calls logging.basicConfig().
     load_dotenv(_ENV_FILE)
-    logging.basicConfig(level=logging.INFO, format="%(name)s: %(message)s")
     uvicorn.run("llm_gateway.app:app", host="127.0.0.1", port=8080)
 
 

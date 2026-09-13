@@ -44,3 +44,10 @@ def model() -> str:
             "for current options. No default is guessed here."
         )
     return value
+
+
+def log_level() -> str:
+    # Defaults to INFO (per-request summaries only) rather than DEBUG
+    # (per-delta trace) -- verbose-by-default is the wrong default for
+    # a hot streaming path.
+    return os.environ.get("LOG_LEVEL", "INFO").upper()
