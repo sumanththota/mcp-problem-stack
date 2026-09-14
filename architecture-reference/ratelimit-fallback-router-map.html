@@ -1,0 +1,523 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1"><style>:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Rate-Limit / Fallback Router</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --bg:#f2f5f4;
+    --surface:#ffffff;
+    --surface-2:#e7ebe9;
+    --ink:#10171a;
+    --ink-soft:#4b5a5f;
+    --line:#c9d2d0;
+    --code-bg:#eaeeec;
+    --accent-gate:#c97c1f;
+    --accent-gate-soft:#f2e0c4;
+    --accent-allow:#1c8b79;
+    --accent-allow-soft:#d6ede8;
+    --accent-deny:#b23a35;
+    --accent-deny-soft:#f5dcda;
+    --shadow: 0 1px 2px rgba(16,23,26,0.06), 0 8px 24px -12px rgba(16,23,26,0.18);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0c1214;
+      --surface:#121a1c;
+      --surface-2:#1a2427;
+      --ink:#e9eeed;
+      --ink-soft:#9fb3af;
+      --line:#2a3639;
+      --code-bg:#0f171a;
+      --accent-gate:#e8a33d;
+      --accent-gate-soft:#3a2c14;
+      --accent-allow:#41d1b9;
+      --accent-allow-soft:#12312c;
+      --accent-deny:#e5615a;
+      --accent-deny-soft:#3a1917;
+      --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 12px 32px -14px rgba(0,0,0,0.6);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0c1214;
+    --surface:#121a1c;
+    --surface-2:#1a2427;
+    --ink:#e9eeed;
+    --ink-soft:#9fb3af;
+    --line:#2a3639;
+    --code-bg:#0f171a;
+    --accent-gate:#e8a33d;
+    --accent-gate-soft:#3a2c14;
+    --accent-allow:#41d1b9;
+    --accent-allow-soft:#12312c;
+    --accent-deny:#e5615a;
+    --accent-deny-soft:#3a1917;
+    --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 12px 32px -14px rgba(0,0,0,0.6);
+  }
+
+  *{box-sizing:border-box;}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    padding:0 20px;
+  }
+  .wrap{max-width:1160px;margin:0 auto;padding-block:40px 72px;}
+
+  h1,h2,h3{font-family:"Archivo", ui-sans-serif, system-ui, sans-serif;text-wrap:balance;margin:0;}
+  code, .mono{font-family:"IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;}
+
+  /* ---------- header ---------- */
+  .eyebrow{
+    font-family:"IBM Plex Mono",monospace;
+    font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--accent-gate);font-weight:600;
+    display:flex;align-items:center;gap:10px;
+  }
+  .eyebrow::before{content:"";width:8px;height:8px;border-radius:2px;background:var(--accent-gate);display:inline-block;}
+  header{padding-block:6px 30px;border-bottom:1px solid var(--line);margin-bottom:34px;}
+  header h1{font-size:clamp(28px,4vw,40px);font-weight:800;letter-spacing:-0.01em;margin-top:8px;}
+  header p{max-width:66ch;color:var(--ink-soft);font-size:15.5px;line-height:1.55;margin-top:10px;}
+  .stack-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px;}
+  .stack-chip{
+    font-family:"IBM Plex Mono",monospace;font-size:11.5px;
+    padding:5px 10px;border-radius:6px;background:var(--surface-2);
+    border:1px solid var(--line);color:var(--ink-soft);
+  }
+  .path-line{margin-top:16px;font-size:12px;color:var(--ink-soft);}
+  .path-line code{background:var(--code-bg);padding:2px 6px;border-radius:4px;border:1px solid var(--line);}
+
+  /* ---------- ticket grid ---------- */
+  .tickets{
+    display:grid;grid-template-columns:repeat(3,1fr);gap:10px;
+    margin-bottom:40px;
+  }
+  @media(max-width:700px){.tickets{grid-template-columns:repeat(2,1fr);}}
+  .ticket{
+    background:var(--surface);border:1px solid var(--line);border-radius:10px;
+    padding:12px 13px;box-shadow:var(--shadow);
+  }
+  .ticket .num{
+    font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--accent-allow);
+    font-weight:600;
+  }
+  .ticket h4{font-size:13px;margin:5px 0 4px;font-family:"Archivo";font-weight:700;}
+  .ticket p{font-size:11.5px;color:var(--ink-soft);line-height:1.4;margin:0;}
+  .tickets-note{font-size:12px;color:var(--ink-soft);margin:-24px 0 40px;}
+  .tickets-note code{background:var(--code-bg);border:1px solid var(--line);padding:1px 5px;border-radius:4px;}
+
+  /* ---------- section headings ---------- */
+  section{margin-bottom:52px;}
+  .sec-head{margin-bottom:20px;}
+  .sec-head .kicker{
+    font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--ink-soft);
+  }
+  .sec-head h2{font-size:22px;font-weight:800;margin-top:4px;}
+
+  /* ---------- diagram frame ---------- */
+  .diagram-frame{
+    background:var(--surface);border:1px solid var(--line);border-radius:16px;
+    padding:18px 14px 22px;box-shadow:var(--shadow);overflow-x:auto;
+  }
+  .diagram-frame svg{display:block;margin:0 auto;width:100%;height:auto;min-width:640px;max-width:1000px;}
+
+  .node-box{
+    width:100%;height:100%;border-radius:10px;padding:8px 12px;
+    display:flex;flex-direction:column;justify-content:center;gap:2px;
+    font-family:"IBM Plex Sans";
+  }
+  .node-file{font-family:"IBM Plex Mono";font-size:11.5px;font-weight:600;color:var(--ink);}
+  .node-fn{font-family:"IBM Plex Mono";font-size:10.5px;color:var(--ink-soft);}
+  .node-desc{font-size:10.5px;color:var(--ink-soft);line-height:1.32;margin-top:1px;}
+
+  .box-neutral{background:var(--surface-2);border:1.5px solid var(--line);}
+  .box-client{background:var(--surface-2);border:1.5px dashed var(--line);}
+  .box-gate{background:var(--accent-gate-soft);border:1.5px solid var(--accent-gate);}
+  .box-allow{border:1.5px solid var(--accent-allow);background:var(--surface);}
+  .box-deny{background:var(--accent-deny-soft);border:1.5px solid var(--accent-deny);}
+  .box-deny .node-file{color:var(--accent-deny);}
+  .box-gate .node-file{color:var(--accent-gate);}
+
+  .lane-label{
+    font-family:"IBM Plex Mono";font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+    fill:var(--accent-deny);font-weight:600;
+  }
+  .lane-sub{font-family:"IBM Plex Sans";font-size:10.5px;fill:var(--ink-soft);}
+  .edge-label{font-family:"IBM Plex Mono";font-size:10px;fill:var(--ink-soft);}
+  .edge-label-strong{font-family:"IBM Plex Mono";font-size:10.5px;font-weight:600;}
+  .bar-label{font-family:"IBM Plex Sans";font-size:10.5px;fill:var(--ink-soft);}
+
+  /* ---------- legend ---------- */
+  .legend{display:flex;flex-wrap:wrap;gap:18px;margin-top:16px;padding:14px 16px;
+    background:var(--surface-2);border-radius:10px;border:1px solid var(--line);}
+  .legend-item{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink-soft);}
+  .swatch{width:22px;height:3px;border-radius:2px;flex:none;}
+  .swatch.dash{background:none;border-top:3px dashed var(--accent-allow);height:0;}
+  .swatch.dash-deny{background:none;border-top:3px dashed var(--accent-deny);height:0;}
+  .swatch.solid-allow{background:var(--accent-allow);}
+  .swatch.solid-gate{background:var(--accent-gate);}
+
+  /* ---------- decision cards ---------- */
+  .decisions{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;}
+  @media(max-width:760px){.decisions{grid-template-columns:1fr;}}
+  .card{
+    background:var(--surface);border:1px solid var(--line);border-radius:14px;
+    padding:20px 22px 22px;box-shadow:var(--shadow);position:relative;
+  }
+  .card .tag{
+    font-family:"IBM Plex Mono";font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;
+    font-weight:600;padding:3px 8px;border-radius:5px;display:inline-block;margin-bottom:10px;
+  }
+  .tag-gate{color:var(--accent-gate);background:var(--accent-gate-soft);}
+  .tag-allow{color:var(--accent-allow);background:var(--accent-allow-soft);}
+  .tag-deny{color:var(--accent-deny);background:var(--accent-deny-soft);}
+  .card h3{font-size:17px;font-weight:700;margin-bottom:8px;}
+  .card p{font-size:13.5px;line-height:1.58;color:var(--ink-soft);margin:0 0 10px;}
+  .card p:last-child{margin-bottom:0;}
+  .card code{background:var(--code-bg);border:1px solid var(--line);padding:1px 5px;border-radius:4px;font-size:12px;color:var(--ink);}
+  .snippet{
+    background:var(--code-bg);border:1px solid var(--line);border-radius:8px;
+    padding:10px 12px;font-family:"IBM Plex Mono";font-size:11.5px;line-height:1.55;
+    color:var(--ink-soft);overflow-x:auto;margin:10px 0;white-space:pre;
+  }
+  .snippet .k{color:var(--accent-allow);}
+  .snippet .c{color:var(--accent-gate);}
+  .note{
+    font-size:12px;color:var(--ink-soft);border-left:2px solid var(--accent-deny);
+    padding-left:10px;margin-top:10px;
+  }
+  .note b{color:var(--ink);}
+
+  /* ---------- module map ---------- */
+  .modules{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);
+    border:1px solid var(--line);border-radius:12px;overflow:hidden;}
+  @media(max-width:900px){.modules{grid-template-columns:repeat(2,1fr);}}
+  @media(max-width:520px){.modules{grid-template-columns:1fr;}}
+  .mod{background:var(--surface);padding:16px 16px 18px;}
+  .mod .file{font-family:"IBM Plex Mono";font-size:12.5px;font-weight:600;color:var(--accent-gate);}
+  .mod .role{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);margin:4px 0 8px;}
+  .mod p{font-size:12px;line-height:1.5;color:var(--ink-soft);margin:0;}
+  .mod .fn{display:block;font-family:"IBM Plex Mono";font-size:11px;color:var(--ink);margin-top:6px;}
+
+  footer{margin-top:10px;color:var(--ink-soft);font-size:11.5px;line-height:1.6;
+    border-top:1px solid var(--line);padding-top:18px;}
+  footer code{background:var(--code-bg);border:1px solid var(--line);padding:1px 5px;border-radius:4px;}
+</style>
+
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow">Module map · request-flow reference</div>
+    <h1>Rate-Limit / Fallback Router</h1>
+    <p>A gateway that enforces a token-aware sliding-window rate limit (50,000 tokens/minute) per tenant, using a <b>reserve-then-reconcile</b> SQLite ledger: each request reserves its worst case (<code>prompt + max_tokens</code>) at admission, then that reservation is corrected down to actual usage once the response completes — or force-released by a background TTL sweep if it never does. Separately, the gateway fails over from a primary to a secondary model provider on a <code>429</code> or a <code>3000ms</code> timeout, and every gateway-constructed failure comes back in one sanitized JSON shape. Built as nine tracer-bullet tickets (T1–T9); T9 is the hardening pass that proves the design under real concurrent and crash conditions rather than assuming it.</p>
+    <div class="stack-row">
+      <span class="stack-chip">FastAPI</span>
+      <span class="stack-chip">httpx.AsyncClient</span>
+      <span class="stack-chip">sqlite3 (stdlib)</span>
+      <span class="stack-chip">uv + src/ layout</span>
+      <span class="stack-chip">uvicorn</span>
+      <span class="stack-chip">pytest + anyio</span>
+    </div>
+    <div class="path-line">Source: <code>mcp-problem-stack/ratelimit-fallback-router/src/ratelimit_router/</code> — <code>app.py · limiter.py · router.py · ttl_sweep.py · errors.py · db.py · main.py</code>, plus <code>mock/primary_mock.py</code> and <code>mock/secondary_mock.py</code>.</div>
+  </header>
+
+  <div class="tickets">
+    <div class="ticket"><div class="num">T1</div><h4>Skeleton passthrough</h4><p><code style="font-size:10.5px">POST /v1/completions</code> → real (mocked) model response. No limiting, no fallback.</p></div>
+    <div class="ticket"><div class="num">T2</div><h4>Token ledger core</h4><p><code style="font-size:10.5px">admit()</code>/<code style="font-size:10.5px">settle()</code> correct in isolation — unit-tested, no server.</p></div>
+    <div class="ticket"><div class="num">T3</div><h4>Wire admission in</h4><p>Over-budget tenant rejected live; under-budget tenant forwarded. Blocked by T1, T2.</p></div>
+    <div class="ticket"><div class="num">T4</div><h4>Settle on completion</h4><p>Ledger reflects actual usage, not worst-case, once a response is known. Blocked by T3.</p></div>
+    <div class="ticket"><div class="num">T5</div><h4>TTL backstop sweep</h4><p>An abandoned reservation releases itself after TTL, no request involved. Blocked by T2.</p></div>
+    <div class="ticket"><div class="num">T6</div><h4>Primary call w/ timeout</h4><p>A hung primary can't hang the client — 3000ms bound enforced. Blocked by T3.</p></div>
+    <div class="ticket"><div class="num">T7</div><h4>Fallback to secondary</h4><p>Real answer even when primary is down; a late reply is never double-counted. Blocked by T6.</p></div>
+    <div class="ticket"><div class="num">T8</div><h4>Error sanitization</h4><p>Every failure mode — over budget, primary down, both down — same JSON shape. Blocked by T3, T7.</p></div>
+    <div class="ticket"><div class="num">T9</div><h4>Concurrency &amp; crash hardening</h4><p>Correct ledger under real concurrent load; a crashed request's reservation recovers on its own. Blocked by T4, T5, T7.</p></div>
+  </div>
+  <p class="tickets-note">Dependency graph (not a straight line — T1/T2 start in parallel, T8/T9 each converge from multiple branches) is tracked in <code>.scratch/ratelimit-fallback-router/board.html</code>. All nine are implemented and passing as of this writing.</p>
+
+  <section>
+    <div class="sec-head">
+      <div class="kicker">Request lifecycle</div>
+      <h2>One call, top to bottom</h2>
+    </div>
+    <div class="diagram-frame">
+      <svg viewBox="0 0 1020 1420" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Request flow through the rate-limit/fallback router">
+        <defs>
+          <marker id="arrowNeutral" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--ink-soft)"/>
+          </marker>
+          <marker id="arrowAllow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--accent-allow)"/>
+          </marker>
+          <marker id="arrowDeny" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--accent-deny)"/>
+          </marker>
+        </defs>
+
+        <!-- ============ lane header ============ -->
+        <text x="600" y="72" class="lane-label">Gateway-constructed failures</text>
+        <text x="600" y="90" class="lane-sub">errors.error_response() builds these; the same shape every time</text>
+
+        <!-- ============ shared-ledger bar ============ -->
+        <rect x="205" y="120" width="6" height="1060" rx="3" fill="var(--accent-gate)" opacity="0.85"/>
+        <text x="196" y="650" class="bar-label" fill="var(--accent-gate)" text-anchor="middle" transform="rotate(-90 196 650)">one shared SQLite connection (app.state.db) — admit(), settle(), and the background sweep() all read/write the same `ledger` table</text>
+
+        <!-- ============ neutral connector lines (spine) ============ -->
+        <line x1="380" y1="84"  x2="380" y2="120" stroke="var(--ink-soft)" stroke-width="1.6" marker-end="url(#arrowNeutral)"/>
+        <text x="392" y="106" class="edge-label">POST /v1/completions</text>
+
+        <line x1="380" y1="178" x2="380" y2="206" stroke="var(--ink-soft)" stroke-width="1.6" marker-end="url(#arrowNeutral)"/>
+        <line x1="380" y1="270" x2="380" y2="300" stroke="var(--ink-soft)" stroke-width="1.6" marker-end="url(#arrowNeutral)"/>
+
+        <!-- diamond1 (allowed?) true edge -->
+        <line x1="380" y1="432" x2="380" y2="462" stroke="var(--accent-allow)" stroke-width="3" marker-end="url(#arrowAllow)"/>
+        <text x="392" y="452" class="edge-label-strong" fill="var(--accent-allow)">True</text>
+        <!-- diamond1 false edge -> tier1 stub -->
+        <line x1="530" y1="366" x2="600" y2="366" stroke="var(--accent-deny)" stroke-width="2" stroke-dasharray="4 3" marker-end="url(#arrowDeny)"/>
+        <text x="540" y="357" class="edge-label-strong" fill="var(--accent-deny)">False</text>
+
+        <line x1="380" y1="526" x2="380" y2="556" stroke="var(--ink-soft)" stroke-width="1.6" marker-end="url(#arrowNeutral)"/>
+
+        <!-- diamond2 (primary healthy?) true edge -> bypass curve to merge -->
+        <path d="M 230,622 C 128,622 96,760 96,878 C 96,940 130,995 230,1004" fill="none" stroke="var(--accent-allow)" stroke-width="2" stroke-dasharray="1 5" stroke-linecap="round" marker-end="url(#arrowAllow)"/>
+        <text x="34" y="878" class="bar-label" transform="rotate(-90 34 878)" text-anchor="middle">primary healthy (200, not 429) — straight to settle(), secondary never called</text>
+        <text x="245" y="614" class="edge-label-strong" fill="var(--accent-allow)">True</text>
+
+        <!-- diamond2 false edge -> continues spine to secondary -->
+        <line x1="380" y1="688" x2="380" y2="718" stroke="var(--accent-deny)" stroke-width="2.4" marker-end="url(#arrowDeny)"/>
+        <text x="392" y="708" class="edge-label-strong" fill="var(--accent-deny)">429 or timeout</text>
+
+        <line x1="380" y1="782" x2="380" y2="812" stroke="var(--ink-soft)" stroke-width="1.6" marker-end="url(#arrowNeutral)"/>
+
+        <!-- diamond3 (secondary ok?) true edge -->
+        <line x1="380" y1="944" x2="380" y2="1004" stroke="var(--accent-allow)" stroke-width="3" marker-end="url(#arrowAllow)"/>
+        <text x="392" y="978" class="edge-label-strong" fill="var(--accent-allow)">True</text>
+        <!-- diamond3 false edge -> tier1 stub -->
+        <line x1="530" y1="878" x2="600" y2="878" stroke="var(--accent-deny)" stroke-width="2" stroke-dasharray="4 3" marker-end="url(#arrowDeny)"/>
+        <text x="540" y="869" class="edge-label-strong" fill="var(--accent-deny)">False (timeout)</text>
+
+        <line x1="380" y1="1062" x2="380" y2="1092" stroke="var(--ink-soft)" stroke-width="1.6" marker-end="url(#arrowNeutral)"/>
+
+        <!-- ============ SPINE NODES ============ -->
+        <foreignObject x="230" y="20" width="300" height="64"><div xmlns="http://www.w3.org/1999/xhtml" class="node-box box-client">
+          <div class="node-file">Tenant client</div>
+          <div class="node-fn">POST /v1/completions</div>
+          <div class="node-desc">{tenant_id, prompt, max_tokens}</div>
+        </div></foreignObject>
+
+        <foreignObject x="230" y="120" width="300" height="58"><div xmlns="http://www.w3.org/1999/xhtml" class="node-box box-neutral">
+          <div class="node-file">app.py</div>
+          <div class="node-fn">request_id = uuid4(); estimate_prompt_tokens(prompt)</div>
+        </div></foreignObject>
+
+        <foreignObject x="230" y="206" width="300" height="64"><div xmlns="http://www.w3.org/1999/xhtml" class="node-box box-neutral">
+          <div class="node-file">limiter.py</div>
+          <div class="node-fn">admit(db, tenant_id, prompt_tokens, max_tokens)</div>
+          <div class="node-desc">reserve = prompt + max_tokens, inside BEGIN IMMEDIATE</div>
+        </div></foreignObject>
+
+        <!-- diamond 1: allowed? -->
+        <polygon points="380,300 530,366 380,432 230,366" fill="var(--accent-gate-soft)" stroke="var(--accent-gate)" stroke-width="1.8"/>
+        <foreignObject x="270" y="320" width="220" height="92"><div xmlns="http://www.w3.org/1999/xhtml" class="node-box" style="text-align:center;align-items:center;background:transparent;">
+          <div class="node-file" style="color:var(--accent-gate);">allowed?</div>
+          <div class="node-fn">current + reserve &gt; 50,000?</div>
+          <div class="node-desc">the admission gate — 60s trailing window, per tenant</div>
+        </div></foreignObject>
+
+        <foreignObject x="230" y="462" width="300" height="64"><div xmlns="http://www.w3.org/1999/xhtml" class="node-box box-allow">
+          <div class="node-file">router.py</div>
+          <div class="node-fn">call_primary(client, body)</div>
+          <div class="node-desc">asyncio.wait_for(..., timeout=3000ms)</div>
+        </div></foreignObject>
+
+        <!-- diamond 2: primary healthy? -->
+        <polygon points="380,556 530,622 380,688 230,622" fill="var(--accent-gate-soft)" stroke="var(--accent-gate)" stroke-width="1.8"/>
+        <foreignObject x="270" y="576" width="220" height="92"><div xmlns="http://www.w3.org/1999/xhtml" class="node-box" style="text-align:center;align-items:center;background:transparent;">
+          <div class="node-file" style="color:var(--accent-gate);">primary ok?</div>
+          <div class="node-fn">status != 429, no PrimaryTimeout</div>
+        </div></foreignObject>
+
+        <foreignObject x="230" y="718" width="300" height="64"><div xmlns="http://www.w3.org/1999/xhtml" class="node-box box-allow">
+          <div class="node-file">router.py</div>
+          <div class="node-fn">call_secondary(client, body)</div>
+          <div class="node-desc">asyncio.wait_for(..., timeout=3000ms)</div>
+        </div></foreignObject>
+
+        <!-- diamond 3: secondary ok? -->
+        <polygon points="380,812 530,878 380,944 230,878" fill="var(--accent-gate-soft)" stroke="var(--accent-gate)" stroke-width="1.8"/>
+        <foreignObject x="270" y="832" width="220" height="92"><div xmlns="http://www.w3.org/1999/xhtml" class="node-box" style="text-align:center;align-items:center;background:transparent;">
+          <div class="node-file" style="color:var(--accent-gate);">secondary ok?</div>
+          <div class="node-fn">no SecondaryTimeout</div>
+        </div></foreignObject>
+
+        <foreignObject x="230" y="1004" width="300" height="58"><div xmlns="http://www.w3.org/1999/xhtml" class="node-box box-allow">
+          <div class="node-file">limiter.py</div>
+          <div class="node-fn">settle(db, request_id, actual_tokens)</div>
+        </div></foreignObject>
+
+        <foreignObject x="230" y="1092" width="300" height="54"><div xmlns="http://www.w3.org/1999/xhtml" class="node-box box-allow">
+          <div class="node-file">200 response</div>
+          <div class="node-desc">provider's body, returned as-is</div>
+        </div></foreignObject>
+
+        <!-- ============ TIER-1 STUBS ============ -->
+        <foreignObject x="600" y="334" width="380" height="64"><div xmlns="http://www.w3.org/1999/xhtml" class="node-box box-deny">
+          <div class="node-file">429 RATE_LIMIT_EXCEEDED</div>
+          <div class="node-desc">"Token budget exceeded for this tenant." No reservation made — nothing for the TTL sweep to clean up.</div>
+        </div></foreignObject>
+
+        <foreignObject x="600" y="846" width="380" height="96"><div xmlns="http://www.w3.org/1999/xhtml" class="node-box box-deny" style="justify-content:flex-start;padding-top:10px;">
+          <div class="node-file">502 ALL_PROVIDERS_UNAVAILABLE</div>
+          <div class="node-fn">BothProvidersFailed</div>
+          <div class="node-desc">"No model provider could complete this request." The reservation from admit() stays 'pending' — the TTL sweep recovers it, not this request.</div>
+        </div></foreignObject>
+
+        <foreignObject x="600" y="120" width="380" height="94"><div xmlns="http://www.w3.org/1999/xhtml" class="node-box box-deny" style="border-style:dashed;">
+          <div class="node-file">500 INTERNAL_ERROR</div>
+          <div class="node-desc">Any unhandled exception, from anywhere on the spine above. Caught by app.py's global @app.exception_handler(Exception) — never a raw traceback to the caller.</div>
+        </div></foreignObject>
+
+        <!-- ============ BACKGROUND TTL LANE ============ -->
+        <text x="380" y="1230" class="lane-label" text-anchor="middle" fill="var(--accent-allow)">Background — independent of any request</text>
+
+        <rect x="230" y="1250" width="560" height="130" rx="12" fill="var(--surface-2)" stroke="var(--accent-allow)" stroke-width="1.5" stroke-dasharray="5 4"/>
+        <foreignObject x="248" y="1264" width="524" height="102"><div xmlns="http://www.w3.org/1999/xhtml" class="node-box" style="align-items:flex-start;background:transparent;">
+          <div class="node-file" style="color:var(--accent-allow);">ttl_sweep.py — run_sweep_loop(conn), ticking every 2s</div>
+          <div class="node-fn">sweep(now): UPDATE ledger SET tokens=0, status='expired' WHERE status='pending' AND ts &lt; now - TTL_SECONDS</div>
+          <div class="node-desc">TTL_SECONDS = PRIMARY_TIMEOUT_S + SECONDARY_TIMEOUT_S + MARGIN_S(2.0) — derived from the system's own call timeouts, not an invented constant. Frees a crashed/abandoned reservation's budget with no request involved.</div>
+        </div></foreignObject>
+
+      </svg>
+    </div>
+
+    <div class="legend">
+      <div class="legend-item"><span class="swatch solid-allow"></span> hot path — admitted, answered by a provider, settled</div>
+      <div class="legend-item"><span class="swatch dash-deny"></span> tier-1 short-circuit — answered locally by errors.py</div>
+      <div class="legend-item"><span class="swatch dash"></span> bypass — primary healthy, secondary never called</div>
+      <div class="legend-item"><span class="swatch solid-gate"></span> a decision made against the ledger or a provider's response</div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <div class="kicker">What this build actually had to decide</div>
+      <h2>Four hard calls, grounded in the code</h2>
+    </div>
+    <div class="decisions">
+
+      <div class="card">
+        <span class="tag tag-gate">limiter.py</span>
+        <h3>Reserve-then-reconcile, one atomic transaction</h3>
+        <p>Admission charges the worst case (<code>prompt_tokens + max_tokens</code>) up front, inside a <code>BEGIN IMMEDIATE</code> transaction so the read-then-write can't race across connections. <code>settle()</code> later corrects that same row down to actual usage — but only if it's still <code>pending</code>; a settle arriving after the TTL sweep already expired the row is dropped, not silently revived.</p>
+        <div class="snippet"><span class="k">def</span> admit(conn, tenant_id, prompt_tokens, max_tokens, *, request_id=<span class="k">None</span>):
+    reserve = prompt_tokens + max_tokens
+    conn.execute(<span class="c">"BEGIN IMMEDIATE"</span>)
+    current = <span class="k">... SUM(tokens) WHERE ts &gt; cutoff ...</span>
+    <span class="k">if</span> current + reserve &gt; BUDGET_TOKENS:
+        conn.rollback(); <span class="k">return</span> <span class="k">False</span>, <span class="k">None</span>
+    <span class="k">... INSERT ... status='pending' ...</span></div>
+        <p>T9's hardening test proves this holds under real threads, not just cooperative asyncio scheduling: 40 concurrent admits for one tenant, each on its own connection to the same on-disk file, land exactly 25 — never more, never fewer.</p>
+      </div>
+
+      <div class="card">
+        <span class="tag tag-allow">router.py</span>
+        <h3>The "late primary response" race needed no special handling</h3>
+        <p>The design session flagged a race: what if the primary replies right after the gateway has already failed over to the secondary? The answer, verified rather than assumed: <code>asyncio.wait_for()</code> cancels the underlying primary call on timeout, so a timed-out call structurally can never produce a result <code>call_with_fallback()</code> would see.</p>
+        <div class="snippet"><span class="k">async def</span> call_with_fallback(client, body):
+    <span class="k">try</span>:
+        response = <span class="k">await</span> call_primary(client, body)
+        <span class="k">if</span> response.status_code != <span class="c">429</span>:
+            <span class="k">return</span> response, <span class="c">"primary"</span>
+    <span class="k">except</span> PrimaryTimeout:
+        <span class="k">pass</span>  <span class="k"># fall through to secondary</span>
+    response = <span class="k">await</span> call_secondary(client, body)
+    <span class="k">return</span> response, <span class="c">"secondary"</span></div>
+        <p>No dedup flag, no cancellation token to thread through — the race the task worried about doesn't exist in this event loop, and a unit test against a mocked transport proves it rather than asserting it by inspection.</p>
+      </div>
+
+      <div class="card">
+        <span class="tag tag-deny">errors.py + app.py</span>
+        <h3>One shape, even for the failure nobody expected</h3>
+        <p>Every gateway-constructed failure — over budget, both providers down, or anything unhandled — returns the same <code>{"error": {"code", "message", "request_id"}}</code>. The first two are explicit branches in the endpoint; the third is a global FastAPI exception handler, so a bug three layers down still can't leak a stack trace to a tenant.</p>
+        <div class="snippet"><span class="k">@app.exception_handler(Exception)</span>
+<span class="k">async def</span> unhandled_exception_handler(request, exc):
+    request_id = request.state.request_id
+    logger.exception(<span class="c">"unhandled error for request_id=%s"</span>, request_id)
+    <span class="k">return</span> errors.error_response(errors.INTERNAL_ERROR, ..., request_id)</div>
+        <p>The <code>request_id</code> is minted once, at the very top of the handler — before admission even runs — so a rejected request's error response still carries one to quote back for support.</p>
+      </div>
+
+      <div class="card">
+        <span class="tag tag-gate">ttl_sweep.py</span>
+        <h3>The TTL is derived, not invented</h3>
+        <p><code>TTL_SECONDS = PRIMARY_TIMEOUT_S + SECONDARY_TIMEOUT_S + MARGIN_S</code>, imported directly from <code>router.py</code> so the two constants can never silently drift apart. A heartbeat-refreshed TTL was considered and rejected: it only earns its complexity if something can legitimately run unbounded, and nothing here does — every provider call already has a hard timeout.</p>
+        <p>T9's crash-recovery test runs the actual <code>run_sweep_loop()</code> background task — not a direct <code>sweep()</code> call — abandons a reservation, and confirms the real loop frees it autonomously once TTL elapses. <code>test_ttl_sweep.py</code> already proved <code>sweep()</code> itself is correct; this proves it's really wired up.</p>
+        <div class="note">Both <code>admit()</code> and <code>sweep()</code> operate on the exact same <code>ledger</code> table through the exact same connection (<code>app.state.db</code>) — there's no separate crash-recovery store to keep in sync.</div>
+      </div>
+
+    </div>
+  </section>
+
+  <section style="margin-bottom:20px;">
+    <div class="sec-head">
+      <div class="kicker">File by file</div>
+      <h2>src/ratelimit_router/ + mock/</h2>
+    </div>
+    <div class="modules">
+      <div class="mod">
+        <div class="file">main.py</div>
+        <div class="role">entrypoint</div>
+        <p>Configures logging and calls <code style="font-size:11px">uvicorn.run("ratelimit_router.app:app", ...)</code> on port 8080.</p>
+        <span class="fn">def main()</span>
+      </div>
+      <div class="mod">
+        <div class="file">app.py</div>
+        <div class="role">orchestration</div>
+        <p>The single <code style="font-size:11px">POST /v1/completions</code> route, the <code style="font-size:11px">lifespan</code> that owns the shared client/db/sweep task, and the global exception handler.</p>
+        <span class="fn">async def completions(request)</span>
+      </div>
+      <div class="mod">
+        <div class="file">limiter.py</div>
+        <div class="role">ledger core</div>
+        <p>Pure, server-independent <code style="font-size:11px">admit()</code>/<code style="font-size:11px">settle()</code> — the token-aware sliding-window admission logic, unit-tested with no HTTP involved.</p>
+        <span class="fn">BUDGET_TOKENS, WINDOW_SECONDS</span>
+      </div>
+      <div class="mod">
+        <div class="file">db.py</div>
+        <div class="role">schema</div>
+        <p>One table, <code style="font-size:11px">ledger(tenant_id, request_id, ts, tokens, status)</code>. Window eviction is just a timestamp filter at read time — no explicit delete.</p>
+        <span class="fn">def connect(path)</span>
+      </div>
+      <div class="mod">
+        <div class="file">router.py</div>
+        <div class="role">fallback</div>
+        <p>Primary-then-secondary orchestration: a fixed 3000ms timeout per call, fallback on <code style="font-size:11px">429</code> or timeout, <code style="font-size:11px">BothProvidersFailed</code> if the secondary also fails.</p>
+        <span class="fn">async def call_with_fallback(...)</span>
+      </div>
+      <div class="mod">
+        <div class="file">ttl_sweep.py</div>
+        <div class="role">backstop</div>
+        <p>A background task, independent of any request, that force-releases any reservation still <code style="font-size:11px">pending</code> past a TTL derived from <code style="font-size:11px">router.py</code>'s own timeouts.</p>
+        <span class="fn">async def run_sweep_loop(conn)</span>
+      </div>
+      <div class="mod">
+        <div class="file">errors.py</div>
+        <div class="role">tier 1</div>
+        <p>One shape for every gateway-constructed error: <code style="font-size:11px">RATE_LIMIT_EXCEEDED</code> (429), <code style="font-size:11px">ALL_PROVIDERS_UNAVAILABLE</code> (502), <code style="font-size:11px">INTERNAL_ERROR</code> (500).</p>
+        <span class="fn">def error_response(...)</span>
+      </div>
+      <div class="mod">
+        <div class="file">mock/primary_mock.py<br>mock/secondary_mock.py</div>
+        <div class="role">stand-ins</div>
+        <p>Independent FastAPI apps, each configurable via <code style="font-size:11px">POST /configure</code> to hang past 3000ms or force a status code — the seam T6/T7's fallback behavior is proven against.</p>
+        <span class="fn">delay_s, force_status</span>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    Diagram is drawn directly from the real source in <code>ratelimit-fallback-router/src/ratelimit_router/</code> — every box, decision, and error code above corresponds to an actual function, branch, or constant found there. Two patterns are reused deliberately from the finished sibling projects this design borrowed from: the shared-client/lifespan pattern from <code>mcp-security-gateway-map.html</code> (one <code>httpx.AsyncClient</code>, opened once, reused per request — here also true of the SQLite connection), and the controlled-mock testing seam from both siblings (a configurable stand-in server instead of a real upstream). All nine tickets pass 23/23 tests as of this writing, including T9's real-thread concurrency stress test and its real-background-task crash-recovery test — neither needed a production-code fix, meaning the ledger and sweep design held up under real conditions on the first attempt.
+  </footer>
+
+</div>
+
+</body></html>

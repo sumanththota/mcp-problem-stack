@@ -1,0 +1,26 @@
+[project]
+name = "ratelimit-router"
+version = "0.1.0"
+description = "Rate-limiting and model-fallback router for an LLM gateway."
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn>=0.34",
+    "httpx>=0.28",
+    "pydantic>=2.13",
+]
+
+[project.scripts]
+ratelimit-router = "ratelimit_router.main:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ratelimit_router"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+]
