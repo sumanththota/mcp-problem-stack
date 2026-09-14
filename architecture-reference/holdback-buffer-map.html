@@ -1,0 +1,638 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1"><style>:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Holdback Buffer Map</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Source+Sans+3:wght@400;500;600;700&display=swap">
+<style>
+  :root{
+    --bg:#eef1ee;
+    --surface:#ffffff;
+    --surface-2:#e3e9e4;
+    --surface-hot:#fff1e6;
+    --ink:#11221c;
+    --ink-dim:#4c5c55;
+    --border:#c7d2c9;
+    --accent:#e35d1f;      /* held / unconfirmed / hot path */
+    --accent-ink:#8a3009;
+    --safe:#1c7d5c;        /* confirmed safe / flushed */
+    --safe-dim:#bfe0d1;
+    --bar:#14181a;         /* the [REDACTED] bar itself */
+    --code-bg:#e4ece6;
+    --shadow: 0 1px 2px rgba(17,34,28,.06), 0 8px 24px -12px rgba(17,34,28,.18);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0c100e;
+      --surface:#141b17;
+      --surface-2:#1b2420;
+      --surface-hot:#26190f;
+      --ink:#e6ede8;
+      --ink-dim:#93a49b;
+      --border:#2b3b32;
+      --accent:#ff8a4a;
+      --accent-ink:#ffcda4;
+      --safe:#4fd6a4;
+      --safe-dim:#1f4436;
+      --bar:#000000;
+      --code-bg:#182620;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 12px 30px -14px rgba(0,0,0,.6);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0c100e;
+    --surface:#141b17;
+    --surface-2:#1b2420;
+    --surface-hot:#26190f;
+    --ink:#e6ede8;
+    --ink-dim:#93a49b;
+    --border:#2b3b32;
+    --accent:#ff8a4a;
+    --accent-ink:#ffcda4;
+    --safe:#4fd6a4;
+    --safe-dim:#1f4436;
+    --bar:#000000;
+    --code-bg:#182620;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 12px 30px -14px rgba(0,0,0,.6);
+  }
+
+  *{box-sizing:border-box;}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:"Source Sans 3", ui-sans-serif, system-ui, sans-serif;
+    padding:0 20px 64px;
+    line-height:1.5;
+  }
+  .wrap{max-width:1040px;margin:0 auto;}
+  code, .mono{font-family:"IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;}
+
+  /* ---------- header ---------- */
+  header.hero{
+    padding:56px 0 30px;
+    border-bottom:1px solid var(--border);
+    margin-bottom:40px;
+  }
+  .eyebrow{
+    font-family:"IBM Plex Mono", monospace;
+    font-size:12.5px;
+    letter-spacing:.11em;
+    text-transform:uppercase;
+    color:var(--accent-ink);
+    background:var(--surface-hot);
+    border:1px solid color-mix(in srgb, var(--accent) 45%, var(--border));
+    display:inline-block;
+    padding:4px 10px;
+    border-radius:3px;
+    margin-bottom:18px;
+  }
+  h1{
+    font-family:"IBM Plex Mono", monospace;
+    font-weight:600;
+    font-size:clamp(28px,4.4vw,42px);
+    margin:0 0 14px;
+    text-wrap:balance;
+    letter-spacing:-.01em;
+  }
+  h1 .redact{
+    background:var(--bar);
+    color:var(--bar);
+    border-radius:3px;
+    padding:0 6px;
+  }
+  header.hero p{
+    max-width:66ch;
+    color:var(--ink-dim);
+    font-size:16px;
+    margin:0 0 6px;
+  }
+  .path{
+    font-family:"IBM Plex Mono", monospace;
+    font-size:12.5px;
+    color:var(--ink-dim);
+    margin-top:14px;
+  }
+
+  section{margin:56px 0;}
+  h2{
+    font-family:"IBM Plex Mono", monospace;
+    font-size:14px;
+    letter-spacing:.09em;
+    text-transform:uppercase;
+    color:var(--ink-dim);
+    margin:0 0 6px;
+    display:flex;
+    align-items:baseline;
+    gap:10px;
+  }
+  h2 .num{color:var(--accent-ink);}
+  h3.section-title{
+    font-family:"IBM Plex Mono", monospace;
+    font-weight:600;
+    font-size:22px;
+    margin:0 0 18px;
+    letter-spacing:-.01em;
+  }
+  .lede{color:var(--ink-dim);max-width:70ch;margin:0 0 24px;font-size:15px;}
+
+  /* ---------- legend ---------- */
+  .legend{
+    display:flex;flex-wrap:wrap;gap:10px 22px;
+    font-family:"IBM Plex Mono", monospace;
+    font-size:12px;
+    color:var(--ink-dim);
+    margin:18px 0 22px;
+    padding:12px 16px;
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:8px;
+    box-shadow:var(--shadow);
+  }
+  .legend span{display:inline-flex;align-items:center;gap:7px;}
+  .swatch{width:13px;height:13px;border-radius:3px;flex:none;display:inline-block;}
+  .sw-normal{background:var(--surface-2);border:1.5px solid var(--border);}
+  .sw-hot{background:var(--surface-hot);border:2px solid var(--accent);}
+  .sw-safe{background:var(--safe-dim);border:2px solid var(--safe);}
+  .sw-ext{background:var(--surface);border:1.5px dashed var(--ink-dim);}
+  .sw-line{width:20px;height:0;border-top:2.5px dashed var(--accent);}
+  .sw-line2{width:20px;height:0;border-top:2.5px solid var(--safe);}
+
+  /* ---------- diagram frame ---------- */
+  .diagram-frame{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:12px;
+    box-shadow:var(--shadow);
+    padding:14px;
+    overflow-x:auto;
+  }
+  .diagram-frame svg{display:block;min-width:820px;width:100%;height:auto;}
+
+  /* svg text helpers via CSS (classes applied inside svg) */
+  .b-title{font-family:"IBM Plex Mono",monospace;font-weight:600;fill:var(--ink);}
+  .b-badge{font-family:"IBM Plex Mono",monospace;font-weight:500;fill:var(--ink-dim);}
+  .b-desc{font-family:"Source Sans 3",sans-serif;fill:var(--ink-dim);}
+  .arrow-label{font-family:"IBM Plex Mono",monospace;fill:var(--ink-dim);}
+  .arrow-label-hot{font-family:"IBM Plex Mono",monospace;fill:var(--accent-ink);font-weight:600;}
+  .arrow-label-safe{font-family:"IBM Plex Mono",monospace;fill:var(--safe);font-weight:600;}
+  .lane-label{font-family:"IBM Plex Mono",monospace;fill:var(--accent-ink);font-weight:600;}
+
+  /* ---------- holdback tape section ---------- */
+  .tape-card{
+    background:var(--surface);border:1px solid var(--border);border-radius:12px;
+    box-shadow:var(--shadow);padding:22px 22px 26px;margin-bottom:22px;
+  }
+  .tape-card h4{
+    font-family:"IBM Plex Mono",monospace;font-size:14px;margin:0 0 4px;
+  }
+  .tape-card .sub{color:var(--ink-dim);font-size:13.5px;margin:0 0 16px;}
+  .tape-row{
+    display:flex;flex-wrap:wrap;gap:6px;
+    font-family:"IBM Plex Mono",monospace;font-size:13px;
+    margin-bottom:10px;
+  }
+  .frag{
+    padding:5px 9px;border-radius:5px;border:1.5px solid var(--safe);
+    background:var(--safe-dim);color:var(--ink);white-space:pre;
+  }
+  .frag.held{border-color:var(--accent);background:var(--surface-hot);color:var(--accent-ink);}
+  .frag .bar{background:var(--bar);color:var(--bar);border-radius:2px;padding:0 4px;}
+  .arrow-sep{color:var(--ink-dim);align-self:center;}
+  .note{
+    font-size:13px;color:var(--ink-dim);margin-top:12px;padding-top:12px;
+    border-top:1px dashed var(--border);
+  }
+  .note code{background:var(--code-bg);padding:1px 5px;border-radius:3px;font-size:12px;}
+
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:20px;}
+  @media (max-width:760px){.grid-2{grid-template-columns:1fr;}}
+
+  table.spec{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:6px;}
+  table.spec th, table.spec td{
+    text-align:left;padding:7px 10px;border-bottom:1px solid var(--border);
+  }
+  table.spec th{
+    font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.06em;
+    text-transform:uppercase;color:var(--ink-dim);font-weight:600;
+  }
+  table.spec td.mono{font-family:"IBM Plex Mono",monospace;font-size:12.5px;}
+  table.spec td.L{font-variant-numeric:tabular-nums;font-weight:600;}
+
+  /* ---------- bug panel ---------- */
+  .bug-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
+  @media (max-width:760px){.bug-grid{grid-template-columns:1fr;}}
+  .bug-card{
+    border-radius:12px;padding:18px 18px 20px;border:1.5px solid var(--border);
+    background:var(--surface);box-shadow:var(--shadow);
+  }
+  .bug-card.before{border-color:color-mix(in srgb, var(--accent) 55%, var(--border));}
+  .bug-card.after{border-color:color-mix(in srgb, var(--safe) 55%, var(--border));}
+  .bug-tag{
+    font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.08em;
+    text-transform:uppercase;padding:3px 8px;border-radius:3px;display:inline-block;
+    margin-bottom:12px;
+  }
+  .bug-card.before .bug-tag{background:var(--surface-hot);color:var(--accent-ink);}
+  .bug-card.after .bug-tag{background:var(--safe-dim);color:var(--safe);}
+  .bug-card pre{
+    font-family:"IBM Plex Mono",monospace;font-size:12px;background:var(--code-bg);
+    padding:12px 14px;border-radius:8px;overflow-x:auto;margin:0 0 12px;line-height:1.55;
+  }
+  .bug-card p{font-size:13.5px;color:var(--ink-dim);margin:0;}
+  .bug-out{
+    font-family:"IBM Plex Mono",monospace;font-size:12.5px;margin-top:10px;
+    padding:8px 10px;border-radius:6px;background:var(--surface-2);
+  }
+  .bug-out .bar{background:var(--bar);color:var(--bar);border-radius:2px;padding:0 3px;}
+
+  /* ---------- module map ---------- */
+  .tree{
+    background:var(--surface);border:1px solid var(--border);border-radius:12px;
+    box-shadow:var(--shadow);padding:8px 4px;
+  }
+  .node{
+    display:grid;grid-template-columns:230px 1fr;gap:16px;
+    padding:11px 18px;border-bottom:1px solid var(--border);
+    align-items:start;
+  }
+  .node:last-child{border-bottom:none;}
+  .node .file{font-family:"IBM Plex Mono",monospace;font-size:13px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .node .file .dim{color:var(--ink-dim);}
+  .node .desc{font-size:13.5px;color:var(--ink-dim);}
+  .node .desc b{color:var(--ink);font-weight:600;}
+  .node.indent .file{padding-left:18px;}
+  .node.hot .file{color:var(--accent-ink);}
+  .tag{
+    font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.05em;
+    text-transform:uppercase;padding:1.5px 6px;border-radius:3px;margin-left:8px;
+    background:var(--surface-2);color:var(--ink-dim);vertical-align:middle;
+  }
+  @media (max-width:640px){
+    .node{grid-template-columns:1fr;gap:4px;}
+  }
+
+  footer{
+    margin-top:64px;padding-top:22px;border-top:1px solid var(--border);
+    font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--ink-dim);
+  }
+</style>
+
+<div class="wrap">
+
+<header class="hero">
+  <span class="eyebrow">llm-redaction-gateway &middot; architecture map</span>
+  <h1>Streaming PII, held just long enough<br>to be <span class="redact">[REDACTED]</span></h1>
+  <p>How <code class="mono">src/llm_gateway</code> gets an OpenRouter SSE stream from wire to client without ever
+  letting an email, SSN, or credit-card number leak across a chunk boundary — and without ever
+  buffering the full response to check it.</p>
+  <p class="path">/mcp-problem-stack/llm-redaction-gateway — grounded in app.py, buffer.py, patterns.py, upstream.py, mock/openrouter_mock.py</p>
+</header>
+
+<section id="pipeline">
+  <h2><span class="num">01</span> Request &amp; Redaction Pipeline</h2>
+  <h3 class="section-title">One request, top to bottom</h3>
+  <p class="lede">Every box below is a real function in the codebase. Orange marks the <b style="color:var(--accent-ink)">held</b> /
+  not-yet-confirmed-safe path — the hot loop that runs on every delta, and the control signal held
+  the entire length of the stream. Teal marks <b style="color:var(--safe)">safe</b>, already-redacted text
+  actually released to the client.</p>
+
+  <div class="legend">
+    <span><span class="swatch sw-normal"></span> plain relay step</span>
+    <span><span class="swatch sw-hot"></span> hot path — buffer + pattern match, runs per delta</span>
+    <span><span class="swatch sw-ext"></span> external / swappable upstream</span>
+    <span><span class="sw-line"></span> finish_reason — held (ADR-0004)</span>
+    <span><span class="sw-line2"></span> redacted text released to client</span>
+  </div>
+
+  <div class="diagram-frame">
+    <svg viewBox="0 0 980 1290" xmlns="http://www.w3.org/2000/svg">
+      <!-- ============ helper defs ============ -->
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--ink-dim)"></path>
+        </marker>
+        <marker id="arrowSafe" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--safe)"></path>
+        </marker>
+        <marker id="arrowHot" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"></path>
+        </marker>
+      </defs>
+
+      <!-- ============ 1 Client ============ -->
+      <g>
+        <rect x="40" y="16" width="520" height="56" rx="8" fill="var(--surface-2)" stroke="var(--border)" stroke-width="1.5"></rect>
+        <text x="58" y="40" class="b-title" font-size="14">Client</text>
+        <text x="58" y="58" class="b-desc" font-size="12">POST /v1/chat/completions &nbsp;{model, messages, stream:true}</text>
+      </g>
+      <line x1="300" y1="72" x2="300" y2="100" stroke="var(--ink-dim)" stroke-width="1.5" marker-end="url(#arrow)"></line>
+
+      <!-- ============ 2 app.py chat_completions ============ -->
+      <g>
+        <rect x="40" y="100" width="520" height="78" rx="8" fill="var(--surface)" stroke="var(--border)" stroke-width="1.5"></rect>
+        <text x="58" y="120" class="b-badge" font-size="11">src/llm_gateway/app.py</text>
+        <text x="58" y="140" class="b-title" font-size="14">chat_completions()</text>
+        <text x="58" y="158" class="b-desc" font-size="12">Checks api_key() / model() eagerly, opens event_stream()</text>
+        <text x="58" y="172" class="b-desc" font-size="12">as a StreamingResponse.</text>
+      </g>
+      <line x1="300" y1="178" x2="300" y2="206" stroke="var(--ink-dim)" stroke-width="1.5" marker-end="url(#arrow)"></line>
+      <text x="312" y="197" class="arrow-label" font-size="11.5">messages, request_id</text>
+
+      <!-- ============ 3 upstream.py ============ -->
+      <g>
+        <rect x="40" y="206" width="520" height="68" rx="8" fill="var(--surface)" stroke="var(--border)" stroke-width="1.5"></rect>
+        <text x="58" y="226" class="b-badge" font-size="11">src/llm_gateway/upstream.py</text>
+        <text x="58" y="246" class="b-title" font-size="14">stream_chat_completion(client, messages, request_id)</text>
+        <text x="58" y="263" class="b-desc" font-size="12">httpx .stream("POST", url) — yields raw SSE lines, unmodified.</text>
+      </g>
+      <line x1="300" y1="274" x2="300" y2="302" stroke="var(--ink-dim)" stroke-width="1.5" marker-end="url(#arrow)"></line>
+      <text x="312" y="293" class="arrow-label" font-size="11.5">POST, stream:true</text>
+
+      <!-- ============ 4 external upstream ============ -->
+      <g>
+        <rect x="40" y="302" width="520" height="78" rx="8" fill="var(--surface)" stroke="var(--ink-dim)" stroke-width="1.5" stroke-dasharray="6 5"></rect>
+        <text x="58" y="323" class="b-badge" font-size="11">config.openrouter_url()</text>
+        <text x="58" y="343" class="b-title" font-size="14">OpenRouter /v1/chat/completions</text>
+        <text x="58" y="361" class="b-desc" font-size="12">— or, under test, mock/openrouter_mock.py, via OPENROUTER_URL.</text>
+        <text x="58" y="375" class="b-desc" font-size="12">Deltas set out-of-band by POST /configure {"deltas":[...]}.</text>
+      </g>
+      <path d="M 200 380 C 200 400, 200 400, 200 408" fill="none" stroke="var(--safe)" stroke-width="1.8" marker-end="url(#arrowSafe)"></path>
+      <text x="212" y="399" class="arrow-label-safe" font-size="11.5">SSE lines: data: {...}\n per delta</text>
+
+      <!-- ============ 5 event_stream loop ============ -->
+      <g>
+        <rect x="40" y="408" width="520" height="86" rx="8" fill="var(--surface)" stroke="var(--border)" stroke-width="1.5"></rect>
+        <text x="58" y="428" class="b-badge" font-size="11">app.py</text>
+        <text x="58" y="448" class="b-title" font-size="14">event_stream() — for each line</text>
+        <text x="58" y="466" class="b-desc" font-size="12">json.loads(line) → choice.delta.content, choice.finish_reason.</text>
+        <text x="58" y="480" class="b-desc" font-size="12">envelope (id/object/created/model) captured once, from line 1.</text>
+      </g>
+
+      <!-- branch: content -> buffer -->
+      <line x1="300" y1="494" x2="300" y2="522" stroke="var(--accent)" stroke-width="2" marker-end="url(#arrowHot)"></line>
+      <text x="312" y="513" class="arrow-label-hot" font-size="11.5">content</text>
+
+      <!-- branch: finish_reason -> lane -->
+      <line x1="560" y1="440" x2="620" y2="440" stroke="var(--accent)" stroke-width="2" stroke-dasharray="1 5" marker-end="url(#arrowHot)"></line>
+
+      <!-- ============ LANE: finish_reason held ============ -->
+      <g>
+        <rect x="620" y="408" width="320" height="86" rx="8" fill="var(--surface-hot)" stroke="var(--accent)" stroke-width="2"></rect>
+        <text x="636" y="428" class="b-badge" font-size="11" fill="var(--accent-ink)">app.py, local var</text>
+        <text x="636" y="448" class="b-title" font-size="13.5" fill="var(--ink)">pending_finish_reason = finish_reason</text>
+        <text x="636" y="465" class="b-desc" font-size="11.5">Captured the instant it's seen — never relayed</text>
+        <text x="636" y="479" class="b-desc" font-size="11.5">on the upstream chunk it arrived on.</text>
+      </g>
+      <line x1="780" y1="494" x2="780" y2="1028" stroke="var(--accent)" stroke-width="2" stroke-dasharray="2 6" marker-end="url(#arrowHot)"></line>
+      <text x="792" y="770" class="lane-label" font-size="12" transform="rotate(90 792 770)" text-anchor="middle">HELD — ADR-0004: not relayed until the final flush completes</text>
+
+      <!-- ============ 6 buffer.py append ============ -->
+      <g>
+        <rect x="40" y="522" width="520" height="72" rx="8" fill="var(--surface-hot)" stroke="var(--accent)" stroke-width="2"></rect>
+        <text x="58" y="542" class="b-badge" font-size="11" fill="var(--accent-ink)">src/llm_gateway/buffer.py</text>
+        <text x="58" y="562" class="b-title" font-size="14">HoldbackBuffer.append(new_text, counts)</text>
+        <text x="58" y="580" class="b-desc" font-size="12">self._text = redact(self._text + new_text, counts)</text>
+      </g>
+      <line x1="300" y1="594" x2="300" y2="612" stroke="var(--accent)" stroke-width="1.8" marker-end="url(#arrowHot)"></line>
+
+      <!-- ============ 6b patterns.py redact ============ -->
+      <g>
+        <rect x="40" y="612" width="520" height="76" rx="8" fill="var(--surface-hot)" stroke="var(--accent)" stroke-width="2"></rect>
+        <text x="58" y="632" class="b-badge" font-size="11" fill="var(--accent-ink)">src/llm_gateway/patterns.py</text>
+        <text x="58" y="652" class="b-title" font-size="14">redact(text, counts)</text>
+        <text x="58" y="669" class="b-desc" font-size="12">Collects every match from all 3 PATTERNS first, sorts by</text>
+        <text x="58" y="682" class="b-desc" font-size="12">(start, -length) — longest span wins on overlap (ADR-0002).</text>
+      </g>
+      <line x1="300" y1="688" x2="300" y2="716" stroke="var(--accent)" stroke-width="1.8" marker-end="url(#arrowHot)"></line>
+      <text x="312" y="707" class="arrow-label-hot" font-size="11.5">redacted text back</text>
+
+      <!-- ============ 6c gate ============ -->
+      <g>
+        <rect x="40" y="716" width="520" height="64" rx="8" fill="var(--surface-hot)" stroke="var(--accent)" stroke-width="2"></rect>
+        <text x="58" y="736" class="b-title" font-size="13.5" fill="var(--accent-ink)">safe-to-flush gate — position, not content</text>
+        <text x="58" y="754" class="b-desc" font-size="12">len(_text) ≤ HOLDBACK_WINDOW (59)? hold all : release text[:-59],</text>
+        <text x="58" y="768" class="b-desc" font-size="12">keep text[-59:] — re-scanned whole, on every single append.</text>
+      </g>
+      <line x1="300" y1="780" x2="300" y2="808" stroke="var(--safe)" stroke-width="2" marker-end="url(#arrowSafe)"></line>
+      <text x="312" y="799" class="arrow-label-safe" font-size="11.5">safe (may be "")</text>
+
+      <!-- ============ 7 yield safe ============ -->
+      <g>
+        <rect x="40" y="808" width="520" height="66" rx="8" fill="var(--surface-2)" stroke="var(--safe)" stroke-width="2"></rect>
+        <text x="58" y="828" class="b-badge" font-size="11">app.py</text>
+        <text x="58" y="848" class="b-title" font-size="13.5">yield _chunk(envelope, content=safe)</text>
+        <text x="58" y="864" class="b-desc" font-size="12">Only when safe is non-empty — streamed straight to the client.</text>
+      </g>
+      <!-- loop back to event_stream for next line -->
+      <path d="M 40 841 C -10 841, -10 451, 40 451" fill="none" stroke="var(--ink-dim)" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#arrow)"></path>
+      <text x="4" y="650" class="arrow-label" font-size="10.5" transform="rotate(-90 20 650)" text-anchor="middle">next line, async for</text>
+
+      <line x1="300" y1="874" x2="300" y2="912" stroke="var(--ink-dim)" stroke-width="1.5" marker-end="url(#arrow)"></line>
+      <text x="312" y="900" class="arrow-label" font-size="11">upstream generator exhausted</text>
+
+      <!-- ============ 8 flush ============ -->
+      <g>
+        <rect x="40" y="912" width="520" height="88" rx="8" fill="var(--surface-hot)" stroke="var(--accent)" stroke-width="2.5"></rect>
+        <text x="58" y="934" class="b-badge" font-size="11" fill="var(--accent-ink)">buffer.py + patterns.py</text>
+        <text x="58" y="955" class="b-title" font-size="14">buffer.flush(counts)</text>
+        <text x="58" y="973" class="b-desc" font-size="12">One final redact() pass, then release everything left —</text>
+        <text x="58" y="987" class="b-desc" font-size="12">regardless of length. The 59-char window no longer applies.</text>
+      </g>
+      <line x1="300" y1="1000" x2="300" y2="1028" stroke="var(--safe)" stroke-width="2" marker-end="url(#arrowSafe)"></line>
+      <text x="312" y="1019" class="arrow-label-safe" font-size="11">remaining</text>
+
+      <!-- ============ 9 finish_reason chunk (lane merges here) ============ -->
+      <g>
+        <rect x="40" y="1028" width="520" height="76" rx="8" fill="var(--surface-hot)" stroke="var(--accent)" stroke-width="2.5"></rect>
+        <text x="58" y="1049" class="b-badge" font-size="11" fill="var(--accent-ink)">app.py</text>
+        <text x="58" y="1069" class="b-title" font-size="13">yield _chunk(envelope, finish_reason=pending_finish_reason or "stop")</text>
+        <text x="58" y="1086" class="b-desc" font-size="12">The upstream's own stop chunk is never relayed as-is (ADR-0004).</text>
+      </g>
+
+      <line x1="300" y1="1104" x2="300" y2="1128" stroke="var(--ink-dim)" stroke-width="1.5" marker-end="url(#arrow)"></line>
+
+      <!-- ============ 10 DONE ============ -->
+      <g>
+        <rect x="40" y="1128" width="520" height="46" rx="8" fill="var(--surface-2)" stroke="var(--border)" stroke-width="1.5"></rect>
+        <text x="58" y="1156" class="b-title" font-size="13">yield b"data: [DONE]\n\n"</text>
+      </g>
+      <line x1="300" y1="1174" x2="300" y2="1204" stroke="var(--ink-dim)" stroke-width="1.5" marker-end="url(#arrow)"></line>
+
+      <!-- ============ 11 client closes ============ -->
+      <g>
+        <rect x="40" y="1204" width="520" height="60" rx="8" fill="var(--surface-2)" stroke="var(--border)" stroke-width="1.5"></rect>
+        <text x="58" y="1228" class="b-title" font-size="14">Client — stream closes</text>
+        <text x="58" y="1246" class="b-desc" font-size="12">Deltas reassembled; no PII ever crossed a chunk boundary unredacted.</text>
+      </g>
+    </svg>
+  </div>
+</section>
+
+<section id="holdback">
+  <h2><span class="num">02</span> The Holdback Mechanic</h2>
+  <h3 class="section-title">HOLDBACK_WINDOW = max(L) − 1 = 59</h3>
+  <p class="lede">Three tracked PII patterns, each with a Max Pattern Length (L). The buffer never releases
+  the last <code class="mono">L−1</code> characters of the largest one — 59 — because that's the most a
+  still-arriving match could need to complete.</p>
+
+  <div class="tape-card" style="margin-bottom:26px;">
+    <table class="spec">
+      <thead><tr><th>pattern</th><th>regex (src/llm_gateway/patterns.py)</th><th>L</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">ssn</td><td class="mono">\b\d{3}-\d{2}-\d{4}\b</td><td class="L">11</td></tr>
+        <tr><td class="mono">credit_card</td><td class="mono">\b\d{4}[ -]?\d{4}[ -]?\d{4}[ -]?\d{4}\b</td><td class="L">19</td></tr>
+        <tr><td class="mono">email</td><td class="mono">\b[\w.+-]+@[\w-]+\.[\w.-]+\b</td><td class="L">60 (deliberate ceiling)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="grid-2">
+    <div class="tape-card">
+      <h4>tests/test_buffer.py — short text, never crosses 59</h4>
+      <p class="sub">Three appends, each returns "" — the whole exchange stays under the window,
+      so nothing is safe to release until stream end.</p>
+      <div class="tape-row">
+        <span class="frag held">append("Sure, my email is sumant") → ""</span>
+      </div>
+      <div class="tape-row">
+        <span class="frag held">append("h@gmail") → ""</span>
+      </div>
+      <div class="tape-row">
+        <span class="frag held">append(".com") → ""</span>
+      </div>
+      <div class="tape-row">
+        <span class="frag">flush() → "Sure, my email is <span class="bar">[REDACTED]</span>"</span>
+      </div>
+      <p class="note">The match only completes on the third append — held back exactly long enough.</p>
+    </div>
+
+    <div class="tape-card">
+      <h4>test_credit_card_never_leaks_mid_number — long text, flushes mid-stream</h4>
+      <p class="sub">Long enough leading text to push past the 59-char window while the card is still
+      arriving. Split right after an internal space — the exact spot the rejected whitespace-rule
+      (ADR-0001) would have leaked "4111 " early.</p>
+      <div class="tape-row">
+        <span class="frag">"Here i"</span><span class="arrow-sep">→</span>
+        <span class="frag">"s your card inf"</span><span class="arrow-sep">→</span>
+        <span class="frag">"ormation which you reque"</span>
+      </div>
+      <div class="tape-row">
+        <span class="frag">"sted earlier today: <span class="bar">[REDACTED]</span>. Thanks for banking with us!"</span>
+      </div>
+      <p class="note">Deltas in: <code>"...requested earlier today: "</code>, <code>"4111 1111 1111 "</code>,
+      <code>"1111"</code>, <code>". Thanks..."</code>. No fragment before the last one contains a single digit.</p>
+    </div>
+  </div>
+</section>
+
+<section id="bug">
+  <h2><span class="num">03</span> Overlap Resolution</h2>
+  <h3 class="section-title">ADR-0002 — the bug that was actually found and fixed</h3>
+  <p class="lede">Applying each pattern in <code class="mono">PATTERNS</code> list order, one at a time, let
+  whichever pattern ran last silently win an overlap. Fix: collect every match first, then resolve.</p>
+
+  <div class="bug-grid">
+    <div class="bug-card before">
+      <span class="bug-tag">before — order-dependent</span>
+      <pre>text = "contact 4111111111111111@example.com for details"
+
+# credit_card runs before email in PATTERNS —
+# it matches + replaces the 16-digit run FIRST:
+text = credit_card.sub("[REDACTED]", text)
+#   -> "contact [REDACTED]@example.com for details"
+# email regex now has no digit run left to match on:
+text = email.sub("[REDACTED]", text)
+#   -> unchanged: "@example.com" leaks in the clear</pre>
+      <div class="bug-out">contact [REDACTED]@example<span class="bar">.com</span> for details</div>
+      <p>credit_card "won" simply by running first — an accident of list order, not a rule.</p>
+    </div>
+
+    <div class="bug-card after">
+      <span class="bug-tag">after — longest-span-wins</span>
+      <pre>spans = []
+for pattern in PATTERNS:               # scan ORIGINAL text,
+    for m in pattern.regex.finditer(text):   # every pattern,
+        spans.append((m.start(), m.end(), pattern.name))
+
+spans.sort(key=lambda s: (s[0], -(s[1]-s[0])))
+# email span [8,37) contains credit_card span [8,25) —
+# same start, email is longer -> sorts first, kept;
+# credit_card overlaps kept span -> dropped.</pre>
+      <div class="bug-out">contact <span class="bar">[REDACTED]</span> for details</div>
+      <p>Matches <code>tests/test_patterns.py::test_overlapping_matches_resolve_to_the_longest</code> and
+      is proven order-independent by reversing <code>PATTERNS</code> in the same file.</p>
+    </div>
+  </div>
+</section>
+
+<section id="modules">
+  <h2><span class="num">04</span> Module Map</h2>
+  <h3 class="section-title">What's actually on disk</h3>
+  <p class="lede">llm-redaction-gateway/ — a FastAPI gateway package plus a hand-built mock upstream,
+  used the same way Task 2's MCP security gateway used a mock downstream (SPEC.md).</p>
+
+  <div class="tree">
+    <div class="node">
+      <div class="file">src/llm_gateway/<span class="dim">app.py</span></div>
+      <div class="desc"><b>Single streaming route.</b> Owns the FastAPI app, the httpx.AsyncClient
+      lifespan, and <code class="mono">event_stream()</code> — the loop that ties buffer + patterns to the wire.</div>
+    </div>
+    <div class="node hot">
+      <div class="file">src/llm_gateway/<span class="dim">buffer.py</span></div>
+      <div class="desc"><b>HoldbackBuffer.</b> One instance per request, never shared. <code class="mono">append()</code>
+      / <code class="mono">flush()</code> / read-only <code class="mono">held_length</code>. <span class="tag">hot path</span></div>
+    </div>
+    <div class="node hot">
+      <div class="file">src/llm_gateway/<span class="dim">patterns.py</span></div>
+      <div class="desc"><b>PIIPattern dataclass, PATTERNS list, redact().</b> Owns HOLDBACK_WINDOW
+      (derived from PATTERNS, not hand-set). <span class="tag">hot path</span></div>
+    </div>
+    <div class="node">
+      <div class="file">src/llm_gateway/<span class="dim">upstream.py</span></div>
+      <div class="desc"><b>stream_chat_completion().</b> The unmodified wire relay to OpenRouter —
+      logs ttfb_ms/duration_ms/status, no redaction logic at all.</div>
+    </div>
+    <div class="node">
+      <div class="file">src/llm_gateway/<span class="dim">config.py</span></div>
+      <div class="desc">Reads OPENROUTER_URL / API_KEY / MODEL / LOG_LEVEL from env. No hardcoded
+      model-slug fallback, on purpose.</div>
+    </div>
+    <div class="node">
+      <div class="file">src/llm_gateway/<span class="dim">models.py</span></div>
+      <div class="desc">ChatMessage / ChatCompletionRequest — mirrors OpenAI's chat-completions request shape.</div>
+    </div>
+    <div class="node">
+      <div class="file">src/llm_gateway/<span class="dim">main.py</span></div>
+      <div class="desc">Entrypoint. Loads .env, then <code class="mono">uvicorn.run("llm_gateway.app:app", ...)</code> on 127.0.0.1:8080.</div>
+    </div>
+    <div class="node">
+      <div class="file">mock/<span class="dim">openrouter_mock.py</span></div>
+      <div class="desc"><b>Controlled stand-in for OpenRouter (ADR-0003).</b> <code class="mono">POST /configure</code>
+      {"deltas":[...]} stores the exact split to replay; <code class="mono">POST /v1/chat/completions</code>
+      ignores its own body and streams those deltas back. <span class="tag">test double</span></div>
+    </div>
+    <div class="node">
+      <div class="file">tests/<span class="dim">test_upstream_connectivity.py</span></div>
+      <div class="desc">Spawns mock (:8195) + gateway (:8180) as real subprocesses, points the gateway's
+      OPENROUTER_URL at the mock, asserts on the actual SSE body. <span class="tag">primary seam</span></div>
+    </div>
+    <div class="node">
+      <div class="file">tests/<span class="dim">test_buffer.py</span> · <span class="dim">test_patterns.py</span></div>
+      <div class="desc">Unit-level: buffer holdback across appends; pattern overlap + order-independence.</div>
+    </div>
+    <div class="node">
+      <div class="file">scripts/<span class="dim">live_smoke_test.py</span></div>
+      <div class="desc">Manual, opt-in real-OpenRouter round trip — a smoke check, never the correctness seam.</div>
+    </div>
+    <div class="node">
+      <div class="file">docs/adr/<span class="dim">0001–0005</span> · SPEC.md · CONTEXT.md</div>
+      <div class="desc">Holdback buffer · overlap resolution · controlled mock · finish_reason sequencing ·
+      hardening out-of-scope — plus the glossary these diagrams' terms come from.</div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  read directly from source in mcp-problem-stack/llm-redaction-gateway — every box, arrow, and label above names a real file, function, or test.
+</footer>
+
+</div>
+
+</body></html>

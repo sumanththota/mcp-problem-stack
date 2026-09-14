@@ -1,0 +1,523 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1"><style>:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>MCP Security Gateway</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --bg:#f2f5f4;
+    --surface:#ffffff;
+    --surface-2:#e7ebe9;
+    --ink:#10171a;
+    --ink-soft:#4b5a5f;
+    --line:#c9d2d0;
+    --code-bg:#eaeeec;
+    --accent-gate:#c97c1f;
+    --accent-gate-soft:#f2e0c4;
+    --accent-allow:#1c8b79;
+    --accent-allow-soft:#d6ede8;
+    --accent-deny:#b23a35;
+    --accent-deny-soft:#f5dcda;
+    --shadow: 0 1px 2px rgba(16,23,26,0.06), 0 8px 24px -12px rgba(16,23,26,0.18);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0c1214;
+      --surface:#121a1c;
+      --surface-2:#1a2427;
+      --ink:#e9eeed;
+      --ink-soft:#9fb3af;
+      --line:#2a3639;
+      --code-bg:#0f171a;
+      --accent-gate:#e8a33d;
+      --accent-gate-soft:#3a2c14;
+      --accent-allow:#41d1b9;
+      --accent-allow-soft:#12312c;
+      --accent-deny:#e5615a;
+      --accent-deny-soft:#3a1917;
+      --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 12px 32px -14px rgba(0,0,0,0.6);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0c1214;
+    --surface:#121a1c;
+    --surface-2:#1a2427;
+    --ink:#e9eeed;
+    --ink-soft:#9fb3af;
+    --line:#2a3639;
+    --code-bg:#0f171a;
+    --accent-gate:#e8a33d;
+    --accent-gate-soft:#3a2c14;
+    --accent-allow:#41d1b9;
+    --accent-allow-soft:#12312c;
+    --accent-deny:#e5615a;
+    --accent-deny-soft:#3a1917;
+    --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 12px 32px -14px rgba(0,0,0,0.6);
+  }
+
+  *{box-sizing:border-box;}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    padding:0 20px;
+  }
+  .wrap{max-width:1160px;margin:0 auto;padding-block:40px 72px;}
+
+  h1,h2,h3{font-family:"Archivo", ui-sans-serif, system-ui, sans-serif;text-wrap:balance;margin:0;}
+  code, .mono{font-family:"IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;}
+
+  /* ---------- header ---------- */
+  .eyebrow{
+    font-family:"IBM Plex Mono",monospace;
+    font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--accent-gate);font-weight:600;
+    display:flex;align-items:center;gap:10px;
+  }
+  .eyebrow::before{content:"";width:8px;height:8px;border-radius:2px;background:var(--accent-gate);display:inline-block;}
+  header{padding-block:6px 30px;border-bottom:1px solid var(--line);margin-bottom:34px;}
+  header h1{font-size:clamp(28px,4vw,40px);font-weight:800;letter-spacing:-0.01em;margin-top:8px;}
+  header p{max-width:62ch;color:var(--ink-soft);font-size:15.5px;line-height:1.55;margin-top:10px;}
+  .stack-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px;}
+  .stack-chip{
+    font-family:"IBM Plex Mono",monospace;font-size:11.5px;
+    padding:5px 10px;border-radius:6px;background:var(--surface-2);
+    border:1px solid var(--line);color:var(--ink-soft);
+  }
+  .path-line{margin-top:16px;font-size:12px;color:var(--ink-soft);}
+  .path-line code{background:var(--code-bg);padding:2px 6px;border-radius:4px;border:1px solid var(--line);}
+
+  /* ---------- slice stepper ---------- */
+  .slices{
+    display:grid;grid-template-columns:repeat(5,1fr);gap:10px;
+    margin-bottom:40px;
+  }
+  .slice{
+    background:var(--surface);border:1px solid var(--line);border-radius:10px;
+    padding:12px 13px;position:relative;box-shadow:var(--shadow);
+  }
+  .slice .num{
+    font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--accent-allow);
+    font-weight:600;
+  }
+  .slice h4{font-size:13px;margin:5px 0 4px;font-family:"Archivo";font-weight:700;}
+  .slice p{font-size:11.5px;color:var(--ink-soft);line-height:1.4;margin:0;}
+  .slice:not(:last-child)::after{
+    content:"→";position:absolute;right:-16px;top:50%;transform:translateY(-50%);
+    color:var(--ink-soft);font-size:13px;display:none;
+  }
+  @media(min-width:820px){.slice:not(:last-child)::after{display:block;}}
+
+  /* ---------- section headings ---------- */
+  section{margin-bottom:52px;}
+  .sec-head{margin-bottom:20px;}
+  .sec-head .kicker{
+    font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--ink-soft);
+  }
+  .sec-head h2{font-size:22px;font-weight:800;margin-top:4px;}
+
+  /* ---------- diagram frame ---------- */
+  .diagram-frame{
+    background:var(--surface);border:1px solid var(--line);border-radius:16px;
+    padding:18px 14px 22px;box-shadow:var(--shadow);overflow-x:auto;
+  }
+  .diagram-frame svg{display:block;margin:0 auto;width:100%;height:auto;min-width:640px;max-width:980px;}
+
+  .node-box{
+    width:100%;height:100%;border-radius:10px;padding:8px 12px;
+    display:flex;flex-direction:column;justify-content:center;gap:2px;
+    font-family:"IBM Plex Sans";
+  }
+  .node-file{font-family:"IBM Plex Mono";font-size:11.5px;font-weight:600;color:var(--ink);}
+  .node-fn{font-family:"IBM Plex Mono";font-size:10.5px;color:var(--ink-soft);}
+  .node-desc{font-size:10.5px;color:var(--ink-soft);line-height:1.32;margin-top:1px;}
+
+  .box-neutral{background:var(--surface-2);border:1.5px solid var(--line);}
+  .box-client{background:var(--surface-2);border:1.5px dashed var(--line);}
+  .box-gate{background:var(--accent-gate-soft);border:1.5px solid var(--accent-gate);}
+  .box-allow{border:1.5px solid var(--accent-allow);background:var(--surface);}
+  .box-deny{background:var(--accent-deny-soft);border:1.5px solid var(--accent-deny);}
+  .box-deny .node-file{color:var(--accent-deny);}
+  .box-gate .node-file{color:var(--accent-gate);}
+
+  .chip-box{
+    width:100%;height:100%;border-radius:7px;background:var(--surface-2);
+    border:1px solid var(--line);display:flex;flex-direction:column;
+    align-items:center;justify-content:center;text-align:center;padding:2px;
+  }
+  .chip-box b{font-family:"IBM Plex Mono";font-size:10.5px;}
+  .chip-box span{font-size:9px;color:var(--ink-soft);margin-top:1px;}
+  .chip-admin b{color:var(--accent-gate);}
+  .chip-anon b{color:var(--accent-deny);}
+
+  .lane-label{
+    font-family:"IBM Plex Mono";font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+    fill:var(--accent-deny);font-weight:600;
+  }
+  .lane-sub{font-family:"IBM Plex Sans";font-size:10.5px;fill:var(--ink-soft);}
+  .edge-label{font-family:"IBM Plex Mono";font-size:10px;fill:var(--ink-soft);}
+  .edge-label-strong{font-family:"IBM Plex Mono";font-size:10.5px;font-weight:600;}
+  .bar-label{font-family:"IBM Plex Sans";font-size:10.5px;fill:var(--ink-soft);}
+
+  /* ---------- legend ---------- */
+  .legend{display:flex;flex-wrap:wrap;gap:18px;margin-top:16px;padding:14px 16px;
+    background:var(--surface-2);border-radius:10px;border:1px solid var(--line);}
+  .legend-item{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink-soft);}
+  .swatch{width:22px;height:3px;border-radius:2px;flex:none;}
+  .swatch.dash{background:none;border-top:3px dashed var(--accent-deny);height:0;}
+  .swatch.solid-allow{background:var(--accent-allow);}
+  .swatch.solid-gate{background:var(--accent-gate);}
+
+  /* ---------- decision cards ---------- */
+  .decisions{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;}
+  @media(max-width:760px){.decisions{grid-template-columns:1fr;}}
+  .card{
+    background:var(--surface);border:1px solid var(--line);border-radius:14px;
+    padding:20px 22px 22px;box-shadow:var(--shadow);position:relative;
+  }
+  .card .tag{
+    font-family:"IBM Plex Mono";font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;
+    font-weight:600;padding:3px 8px;border-radius:5px;display:inline-block;margin-bottom:10px;
+  }
+  .tag-gate{color:var(--accent-gate);background:var(--accent-gate-soft);}
+  .tag-allow{color:var(--accent-allow);background:var(--accent-allow-soft);}
+  .tag-deny{color:var(--accent-deny);background:var(--accent-deny-soft);}
+  .card h3{font-size:17px;font-weight:700;margin-bottom:8px;}
+  .card p{font-size:13.5px;line-height:1.58;color:var(--ink-soft);margin:0 0 10px;}
+  .card p:last-child{margin-bottom:0;}
+  .card code{background:var(--code-bg);border:1px solid var(--line);padding:1px 5px;border-radius:4px;font-size:12px;color:var(--ink);}
+  .snippet{
+    background:var(--code-bg);border:1px solid var(--line);border-radius:8px;
+    padding:10px 12px;font-family:"IBM Plex Mono";font-size:11.5px;line-height:1.55;
+    color:var(--ink-soft);overflow-x:auto;margin:10px 0;white-space:pre;
+  }
+  .snippet .k{color:var(--accent-allow);}
+  .note{
+    font-size:12px;color:var(--ink-soft);border-left:2px solid var(--accent-deny);
+    padding-left:10px;margin-top:10px;
+  }
+  .note b{color:var(--ink);}
+
+  /* ---------- module map ---------- */
+  .modules{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);
+    border:1px solid var(--line);border-radius:12px;overflow:hidden;}
+  @media(max-width:900px){.modules{grid-template-columns:repeat(2,1fr);}}
+  @media(max-width:520px){.modules{grid-template-columns:1fr;}}
+  .mod{background:var(--surface);padding:16px 16px 18px;}
+  .mod .file{font-family:"IBM Plex Mono";font-size:12.5px;font-weight:600;color:var(--accent-gate);}
+  .mod .role{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);margin:4px 0 8px;}
+  .mod p{font-size:12px;line-height:1.5;color:var(--ink-soft);margin:0;}
+  .mod .fn{display:block;font-family:"IBM Plex Mono";font-size:11px;color:var(--ink);margin-top:6px;}
+
+  footer{margin-top:10px;color:var(--ink-soft);font-size:11.5px;line-height:1.6;
+    border-top:1px solid var(--line);padding-top:18px;}
+  footer code{background:var(--code-bg);border:1px solid var(--line);padding:1px 5px;border-radius:4px;}
+</style>
+
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow">Module map · request-flow reference</div>
+    <h1>MCP Security Gateway</h1>
+    <p>An HTTP/JSON-RPC reverse proxy that sits in front of a downstream MCP server and enforces one rule: a <code>tools/call</code> whose <code>params.name</code> starts with <code>admin_</code> must come from a caller whose bearer-token role is <code>admin</code>, or the gateway answers with a JSON-RPC error itself and the request never reaches the downstream server. Built as five tracer-bullet slices; slice 5 is the actual security boundary.</p>
+    <div class="stack-row">
+      <span class="stack-chip">FastAPI</span>
+      <span class="stack-chip">httpx.AsyncClient</span>
+      <span class="stack-chip">Pydantic v2</span>
+      <span class="stack-chip">uv + src/ layout</span>
+      <span class="stack-chip">uvicorn</span>
+    </div>
+    <div class="path-line">Source: <code>mcp-problem-stack/mcp-security-gateway/src/mcp_gateway/</code> — <code>app.py · auth.py · policy.py · errors.py · forwarder.py · rpc.py · main.py</code>, plus <code>mock/downstream_mock.py</code>.</div>
+  </header>
+
+  <div class="slices">
+    <div class="slice"><div class="num">SLICE 1</div><h4>Skeleton</h4><p>One <code style="font-size:10.5px">POST /rpc</code> route, parses JSON, echoes it back verbatim. No auth, no forwarding.</p></div>
+    <div class="slice"><div class="num">SLICE 2</div><h4>Method branch</h4><p><code style="font-size:10.5px">rpc.py</code>'s envelope model; branches <code style="font-size:10.5px">tools/list</code> vs <code style="font-size:10.5px">tools/call</code> with canned replies.</p></div>
+    <div class="slice"><div class="num">SLICE 3</div><h4>Real forwarding</h4><p><code style="font-size:10.5px">forwarder.py</code> + the mock downstream; every request relayed, no gating yet.</p></div>
+    <div class="slice"><div class="num">SLICE 4</div><h4>Auth, unenforced</h4><p><code style="font-size:10.5px">auth.py</code> extracts a role from the bearer token and just logs it.</p></div>
+    <div class="slice"><div class="num">SLICE 5</div><h4>The boundary</h4><p><code style="font-size:10.5px">policy.py</code> wired in before <code style="font-size:10.5px">forwarder.py</code>. This is the actual gate.</p></div>
+  </div>
+
+  <section>
+    <div class="sec-head">
+      <div class="kicker">Request lifecycle</div>
+      <h2>One call, top to bottom</h2>
+    </div>
+    <div class="diagram-frame">
+      <svg viewBox="0 0 1020 1010" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Request flow through the gateway">
+        <defs>
+          <marker id="arrowNeutral" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--ink-soft)"/>
+          </marker>
+          <marker id="arrowAllow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--accent-allow)"/>
+          </marker>
+          <marker id="arrowDeny" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--accent-deny)"/>
+          </marker>
+        </defs>
+
+        <!-- ============ TIER-1 lane header ============ -->
+        <text x="600" y="72" class="lane-label">Tier 1 — gateway-answered</text>
+        <text x="600" y="90" class="lane-sub">short-circuits: errors.py builds the object, forwarder.py never runs</text>
+
+        <!-- ============ neutral connector lines (spine) ============ -->
+        <line x1="380" y1="84"  x2="380" y2="120" stroke="var(--ink-soft)" stroke-width="1.6" marker-end="url(#arrowNeutral)"/>
+        <text x="392" y="106" class="edge-label">raw JSON body</text>
+
+        <line x1="380" y1="178" x2="380" y2="208" stroke="var(--ink-soft)" stroke-width="1.6" marker-end="url(#arrowNeutral)"/>
+        <line x1="380" y1="266" x2="380" y2="296" stroke="var(--ink-soft)" stroke-width="1.6" marker-end="url(#arrowNeutral)"/>
+        <line x1="380" y1="406" x2="380" y2="436" stroke="var(--ink-soft)" stroke-width="1.6" marker-end="url(#arrowNeutral)"/>
+        <line x1="380" y1="494" x2="380" y2="524" stroke="var(--ink-soft)" stroke-width="1.6" marker-end="url(#arrowNeutral)"/>
+        <text x="392" y="514" class="edge-label">tools/call</text>
+        <line x1="380" y1="578" x2="380" y2="606" stroke="var(--ink-soft)" stroke-width="1.6" marker-end="url(#arrowNeutral)"/>
+
+        <!-- diamond true edge (hot path) -->
+        <line x1="380" y1="738" x2="380" y2="772" stroke="var(--accent-allow)" stroke-width="3" marker-end="url(#arrowAllow)"/>
+        <text x="392" y="762" class="edge-label-strong" fill="var(--accent-allow)">True</text>
+
+        <line x1="380" y1="836" x2="380" y2="876" stroke="var(--accent-allow)" stroke-width="3" marker-end="url(#arrowAllow)"/>
+
+        <!-- diamond false edge -> stub 5 -->
+        <line x1="530" y1="672" x2="600" y2="672" stroke="var(--accent-deny)" stroke-width="2" stroke-dasharray="4 3" marker-end="url(#arrowDeny)"/>
+        <text x="540" y="663" class="edge-label-strong" fill="var(--accent-deny)">False</text>
+
+        <!-- horizontal dashed connectors: spine step -> tier1 stub -->
+        <line x1="530" y1="149" x2="600" y2="149" stroke="var(--accent-deny)" stroke-width="1.6" stroke-dasharray="4 3" marker-end="url(#arrowDeny)"/>
+        <line x1="530" y1="237" x2="600" y2="237" stroke="var(--accent-deny)" stroke-width="1.6" stroke-dasharray="4 3" marker-end="url(#arrowDeny)"/>
+        <line x1="530" y1="465" x2="600" y2="465" stroke="var(--accent-deny)" stroke-width="1.6" stroke-dasharray="4 3" marker-end="url(#arrowDeny)"/>
+        <line x1="530" y1="551" x2="600" y2="551" stroke="var(--accent-deny)" stroke-width="1.6" stroke-dasharray="4 3" marker-end="url(#arrowDeny)"/>
+
+        <!-- tools/list bypass: skips tool_name check + policy gate entirely -->
+        <path d="M 230,462 C 130,462 96,600 96,672 C 96,760 130,860 230,876" fill="none" stroke="var(--accent-allow)" stroke-width="2" stroke-dasharray="1 5" stroke-linecap="round" marker-end="url(#arrowAllow)"/>
+        <text x="30" y="640" class="bar-label" transform="rotate(-90 30 640)" text-anchor="middle">tools/list — nothing to authorize, straight to forward()</text>
+
+        <!-- lifespan persistence bar -->
+        <rect x="205" y="120" width="6" height="716" rx="3" fill="var(--accent-gate)" opacity="0.85"/>
+        <text x="196" y="470" class="bar-label" fill="var(--accent-gate)" text-anchor="middle" transform="rotate(-90 196 470)">lifespan(): one httpx.AsyncClient for the app's life — not opened per request</text>
+
+        <!-- return path -->
+        <path d="M 230,916 C 150,916 118,880 118,672 C 118,420 150,84 230,52" fill="none" stroke="var(--accent-allow)" stroke-width="1.8" stroke-dasharray="1 6" stroke-linecap="round" marker-end="url(#arrowAllow)"/>
+        <text x="60" y="672" class="bar-label" text-anchor="middle" transform="rotate(-90 60 672)">HTTP 200, always — result or error lives in the body</text>
+
+        <!-- ============ SPINE NODES (foreignObject) ============ -->
+        <!-- Client -->
+        <foreignObject x="230" y="20" width="300" height="64"><div xmlns="http://www.w3.org/1999/xhtml" class="node-box box-client">
+          <div class="node-file">AI agent / MCP client</div>
+          <div class="node-fn">POST /rpc</div>
+          <div class="node-desc">JSON-RPC 2.0 body + Authorization: Bearer &lt;token&gt;</div>
+        </div></foreignObject>
+
+        <!-- app.py parse -->
+        <foreignObject x="230" y="120" width="300" height="58"><div xmlns="http://www.w3.org/1999/xhtml" class="node-box box-neutral">
+          <div class="node-file">app.py</div>
+          <div class="node-fn">await request.json()</div>
+        </div></foreignObject>
+
+        <!-- rpc.py validate -->
+        <foreignObject x="230" y="208" width="300" height="58"><div xmlns="http://www.w3.org/1999/xhtml" class="node-box box-neutral">
+          <div class="node-file">rpc.py</div>
+          <div class="node-fn">RpcRequest.model_validate(raw)</div>
+        </div></foreignObject>
+
+        <!-- auth.py -->
+        <foreignObject x="230" y="296" width="300" height="66"><div xmlns="http://www.w3.org/1999/xhtml" class="node-box box-neutral">
+          <div class="node-file">auth.py</div>
+          <div class="node-fn">get_role(request)</div>
+          <div class="node-desc">Authorization header → role, via _TOKEN_TO_ROLE</div>
+        </div></foreignObject>
+
+        <!-- role chips -->
+        <foreignObject x="230" y="372" width="93" height="34"><div xmlns="http://www.w3.org/1999/xhtml" class="chip-box chip-admin"><b>admin</b><span>admin-token</span></div></foreignObject>
+        <foreignObject x="333" y="372" width="93" height="34"><div xmlns="http://www.w3.org/1999/xhtml" class="chip-box"><b>viewer</b><span>viewer-token</span></div></foreignObject>
+        <foreignObject x="436" y="372" width="94" height="34"><div xmlns="http://www.w3.org/1999/xhtml" class="chip-box chip-anon"><b>None</b><span>anonymous</span></div></foreignObject>
+
+        <!-- method branch -->
+        <foreignObject x="230" y="436" width="300" height="58"><div xmlns="http://www.w3.org/1999/xhtml" class="node-box box-neutral">
+          <div class="node-file">app.py</div>
+          <div class="node-fn">if method == "tools/list" / "tools/call"</div>
+        </div></foreignObject>
+
+        <!-- tool_name check -->
+        <foreignObject x="230" y="524" width="300" height="54"><div xmlns="http://www.w3.org/1999/xhtml" class="node-box box-neutral">
+          <div class="node-file">app.py</div>
+          <div class="node-fn">rpc_request.tool_name is None?</div>
+        </div></foreignObject>
+
+        <!-- policy diamond -->
+        <polygon points="380,606 530,672 380,738 230,672" fill="var(--accent-gate-soft)" stroke="var(--accent-gate)" stroke-width="1.8"/>
+        <foreignObject x="270" y="626" width="220" height="92"><div xmlns="http://www.w3.org/1999/xhtml" class="node-box" style="text-align:center;align-items:center;background:transparent;">
+          <div class="node-file" style="color:var(--accent-gate);">policy.py</div>
+          <div class="node-fn">is_authorized(role, tool_name)</div>
+          <div class="node-desc">deny only if name starts "admin_" &amp; role != "admin"</div>
+        </div></foreignObject>
+
+        <!-- forwarder -->
+        <foreignObject x="230" y="772" width="300" height="64"><div xmlns="http://www.w3.org/1999/xhtml" class="node-box box-allow">
+          <div class="node-file">forwarder.py</div>
+          <div class="node-fn">forward(client, payload)</div>
+          <div class="node-desc">client.post(DOWNSTREAM_URL, json=payload) — raw dict, verbatim</div>
+        </div></foreignObject>
+
+        <!-- mock downstream -->
+        <foreignObject x="230" y="876" width="300" height="100"><div xmlns="http://www.w3.org/1999/xhtml" class="node-box box-allow">
+          <div class="node-file">mock/downstream_mock.py</div>
+          <div class="node-fn">POST 127.0.0.1:8090/rpc</div>
+          <div class="node-desc">separate FastAPI app, zero auth of its own. tools/list → [get_data, admin_reset_key]. Every reply tagged "served_by":"downstream-mock".</div>
+        </div></foreignObject>
+
+        <!-- ============ TIER-1 STUBS ============ -->
+        <foreignObject x="600" y="120" width="380" height="58"><div xmlns="http://www.w3.org/1999/xhtml" class="node-box box-deny">
+          <div class="node-file">-32700 PARSE_ERROR</div>
+          <div class="node-desc">"Parse error: body is not valid JSON"</div>
+        </div></foreignObject>
+
+        <foreignObject x="600" y="208" width="380" height="58"><div xmlns="http://www.w3.org/1999/xhtml" class="node-box box-deny">
+          <div class="node-file">-32600 INVALID_REQUEST</div>
+          <div class="node-desc">ValidationError from RpcRequest, errors as data</div>
+        </div></foreignObject>
+
+        <foreignObject x="600" y="436" width="380" height="58"><div xmlns="http://www.w3.org/1999/xhtml" class="node-box box-deny">
+          <div class="node-file">-32601 METHOD_NOT_FOUND</div>
+          <div class="node-desc">f"Method not found: {method!r}" — anything but the two known methods</div>
+        </div></foreignObject>
+
+        <foreignObject x="600" y="524" width="380" height="54"><div xmlns="http://www.w3.org/1999/xhtml" class="node-box box-deny">
+          <div class="node-file">-32602 INVALID_PARAMS</div>
+          <div class="node-desc">data: {"missing": "params.name"} — malformed, not a denial</div>
+        </div></foreignObject>
+
+        <foreignObject x="600" y="606" width="380" height="132"><div xmlns="http://www.w3.org/1999/xhtml" class="node-box box-deny" style="justify-content:flex-start;padding-top:12px;">
+          <div class="node-file" style="font-size:13px;">-32001 UNAUTHORIZED_TOOL_CALL</div>
+          <div class="node-fn">"Unauthorized Tool Call"</div>
+          <div class="node-desc">The security boundary itself. errors.jsonrpc_error() builds this; forwarder.forward() is never called; the downstream mock's log stays empty.</div>
+        </div></foreignObject>
+
+        <!-- tier 2 note near mock output -->
+        <text x="600" y="906" class="lane-label" fill="var(--accent-allow)">Tier 2 — downstream-produced</text>
+        <text x="600" y="924" class="lane-sub">forwarded verbatim: a real result, or the mock's own error (e.g. its</text>
+        <text x="600" y="939" class="lane-sub">own -32601 "Unknown tool"). Not a gateway-constructed object.</text>
+
+      </svg>
+    </div>
+
+    <div class="legend">
+      <div class="legend-item"><span class="swatch solid-allow"></span> hot path — authorized call, forwarded and answered</div>
+      <div class="legend-item"><span class="swatch dash"></span> tier-1 short-circuit — answered locally, downstream never contacted</div>
+      <div class="legend-item"><span class="swatch solid-gate"></span> policy.py — the authorization decision itself</div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <div class="kicker">What this build actually had to decide</div>
+      <h2>Four hard calls, grounded in the code</h2>
+    </div>
+    <div class="decisions">
+
+      <div class="card">
+        <span class="tag tag-gate">policy.py</span>
+        <h3>The gate is one pure function</h3>
+        <p><code>is_authorized(role, tool_name)</code> takes two plain values and returns a bool — no request object, no httpx, nothing to mock to test it. It's wired into the <code>tools/call</code> branch in <code>app.py</code>, strictly before <code>forwarder.forward()</code> is ever awaited.</p>
+        <div class="snippet">ADMIN_PREFIX = <span class="k">"admin_"</span>
+
+<span class="k">def</span> is_authorized(role, tool_name):
+    if tool_name and tool_name.startswith(ADMIN_PREFIX):
+        return role == <span class="k">"admin"</span>
+    return <span class="k">True</span></div>
+        <p>Everything not prefixed <code>admin_</code> is allowed unconditionally — the policy scopes exactly to the task's own rule, nothing broader.</p>
+      </div>
+
+      <div class="card">
+        <span class="tag tag-allow">app.py — lifespan</span>
+        <h3>One socket, not one per call</h3>
+        <p>A FastAPI <code>lifespan</code> context manager opens a single <code>httpx.AsyncClient</code> at startup and stores it on <code>app.state.http_client</code>; it's closed once, at shutdown. Every <code>forward()</code> call reuses that same client — and its underlying TCP connection pool — instead of spinning one up per request.</p>
+        <div class="snippet"><span class="k">@asynccontextmanager</span>
+async def lifespan(app):
+    app.state.http_client = httpx.AsyncClient()
+    <span class="k">yield</span>
+    await app.state.http_client.aclose()</div>
+        <p>The comment in the source is explicit about why: <em>"instead of opening a new connection pool to the downstream server on every single request."</em></p>
+      </div>
+
+      <div class="card">
+        <span class="tag tag-deny">errors.py + forwarder.py</span>
+        <h3>Two tiers of "no"</h3>
+        <p><strong>Tier 1</strong> is protocol-level: <code>errors.py</code>'s <code>jsonrpc_error()</code> builds all five codes above — the gateway constructs and returns them itself, and <code>forwarder.py</code> never runs. <strong>Tier 2</strong> is whatever the downstream server actually replies — <code>forward()</code> relays that <code>response.json()</code> body verbatim, success or failure, unmodified.</p>
+        <div class="note">This gateway's tier 2 is a <b>verbatim relay</b> of the downstream body — not a <code>isError: true</code> business-result flag. That flag pattern belongs to the sibling <code>mcp-tool-server</code>'s <code>CallToolResult</code>, a different project; nothing in <code>mcp_gateway</code> constructs or inspects an <code>isError</code> field.</div>
+      </div>
+
+      <div class="card">
+        <span class="tag tag-gate">auth.py + policy.py</span>
+        <h3>Anonymous, but not exempt</h3>
+        <p>A missing, malformed, or unrecognized <code>Authorization</code> header isn't rejected — <code>get_role()</code> just returns <code>None</code>. That <code>None</code> role still passes <code>is_authorized()</code> for any non-<code>admin_</code> tool; it's only refused at the <code>admin_</code> gate, where <code>None == "admin"</code> is false.</p>
+        <p>No blanket "must authenticate" rule was added — the task scoped the admin requirement to <code>admin_</code>-prefixed tools specifically, and the gate honors exactly that scope, deliberately, per the project's own grilling-pass notes in <code>PLAN.md</code>.</p>
+      </div>
+
+    </div>
+  </section>
+
+  <section style="margin-bottom:20px;">
+    <div class="sec-head">
+      <div class="kicker">File by file</div>
+      <h2>src/mcp_gateway/ + mock/</h2>
+    </div>
+    <div class="modules">
+      <div class="mod">
+        <div class="file">main.py</div>
+        <div class="role">entrypoint</div>
+        <p>Configures logging and calls <code style="font-size:11px">uvicorn.run("mcp_gateway.app:app", ...)</code> on port 8080.</p>
+        <span class="fn">def main()</span>
+      </div>
+      <div class="mod">
+        <div class="file">app.py</div>
+        <div class="role">orchestration</div>
+        <p>The single <code style="font-size:11px">POST /rpc</code> route and the <code style="font-size:11px">lifespan</code> that owns the shared client. Every response is HTTP 200; outcome lives in the body.</p>
+        <span class="fn">async def rpc(request)</span>
+      </div>
+      <div class="mod">
+        <div class="file">rpc.py</div>
+        <div class="role">envelope</div>
+        <p>Pydantic <code style="font-size:11px">RpcRequest</code>, deliberately loose (<code style="font-size:11px">extra="allow"</code>) — only <code style="font-size:11px">method</code> and <code style="font-size:11px">params.name</code> matter to the gateway.</p>
+        <span class="fn">.tool_name property</span>
+      </div>
+      <div class="mod">
+        <div class="file">auth.py</div>
+        <div class="role">identity</div>
+        <p>Hardcoded <code style="font-size:11px">_TOKEN_TO_ROLE</code> dict, not real JWT — a deliberate stand-in flagged as such in <code style="font-size:11px">PLAN.md</code>.</p>
+        <span class="fn">def get_role(request)</span>
+      </div>
+      <div class="mod">
+        <div class="file">policy.py</div>
+        <div class="role">decision</div>
+        <p>Zero dependencies — two values in, a bool out. The entire authorization surface of the gateway lives here.</p>
+        <span class="fn">def is_authorized(role, tool_name)</span>
+      </div>
+      <div class="mod">
+        <div class="file">errors.py</div>
+        <div class="role">tier 1</div>
+        <p>One shape for every gateway-constructed JSON-RPC error: the five codes from PARSE_ERROR to UNAUTHORIZED_TOOL_CALL.</p>
+        <span class="fn">def jsonrpc_error(...)</span>
+      </div>
+      <div class="mod">
+        <div class="file">forwarder.py</div>
+        <div class="role">tier 2</div>
+        <p>Posts the client's raw dict downstream unmodified and returns exactly what came back — no re-serialization round trip.</p>
+        <span class="fn">async def forward(client, payload)</span>
+      </div>
+      <div class="mod">
+        <div class="file">mock/downstream_mock.py</div>
+        <div class="role">stand-in</div>
+        <p>A second, independent FastAPI app on :8090 with no concept of authorization at all — it will run <code style="font-size:11px">admin_reset_key</code> for anyone who asks it directly, on purpose.</p>
+        <span class="fn">TOOLS, _CANNED_RESULTS</span>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    Diagram is drawn directly from the real source in <code>mcp-security-gateway/src/mcp_gateway/</code> and <code>mock/downstream_mock.py</code> — every box and code path above corresponds to an actual file, function, or constant found there. One note for the next sibling project: this repo's tree currently has no <code>tests/</code> directory and no benchmark script, so the connection-pooling win described in <code>PLAN.md</code>'s context section is real as an implemented pattern (one shared <code>httpx.AsyncClient</code> via lifespan) but isn't backed by a committed timing/<code>lsof</code> artifact in this checkout.
+  </footer>
+
+</div>
+
+</body></html>
